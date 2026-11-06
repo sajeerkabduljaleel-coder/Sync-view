@@ -21,22 +21,35 @@ app.use(express.json());
 // Global instance of the authoritative watch party manager
 const partyManager = new WatchPartyManager();
 
-// Seed an initial demo room so users immediately see an active watch party if they explore parties!
-const initialParty = partyManager.createRoom({
-  title: '🔥 Live Film Breakdown: Aethelgard Reveal',
-  hostName: 'Marcus Vance',
-  sourceVideo: SAMPLE_SOURCES[0],
-  primaryReaction: SAMPLE_REACTIONS[0],
-  additionalReactions: [SAMPLE_REACTIONS[1], SAMPLE_REACTIONS[2]],
-});
-
-// Helper to extract host token from Bearer header or request body
+// Helper to extract host token from headers or body
 function extractHostToken(req: Request): string {
+  const hostHeader = req.headers['x-host-token'];
+  if (typeof hostHeader === 'string' && hostHeader.trim()) {
+    return hostHeader.trim();
+  }
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     return authHeader.substring(7).trim();
   }
   return (req.body?.hostToken || req.query?.hostToken || '').toString().trim();
+}
+
+// Helper to extract participant session token from headers or query/body
+function extractParticipantToken(req: Request): string {
+  const pHeader = req.headers['x-participant-token'];
+  if (typeof pHeader === 'string' && pHeader.trim()) {
+    return pHeader.trim();
+  }
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.substring(7).trim();
+  }
+  return (
+    req.body?.participantToken ||
+    req.body?.existingToken ||
+    req.query?.participantToken ||
+    ''
+  ).toString().trim();
 }
 
 // ==========================================
@@ -74,127 +87,218 @@ app.get('/api/catalogue/reactions', (req: Request, res: Response) => {
 
 // Watch Party API
 
+// Browse active watch parties
+app.get('/api/parties', async (_req: Request, res: Response) => {
+  try {
+    // Return sample active party or registered active rooms
+    const activeDemo = await partyManager.getRoom('room-featured-demo');
+    if (activeDemo) {
+      return res.json([activeDemo]);
+    }
+    res.json([]);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retrieve active parties' });
+  }
+});
+
 // Create a new room
-app.post('/api/parties', (req: Request, res: Response) => {
-  const { title, hostName, sourceId, reactionId } = req.body;
+app.post('/api/parties', async (req: Request, res: Response) => {
+  try {
+    const { title, hostName, sourceId, reactionId } = req.body;
 
-  const source = SAMPLE_SOURCES.find((s) => s.id === sourceId) || SAMPLE_SOURCES[0];
-  const primaryReaction = SAMPLE_REACTIONS.find((r) => r.id === reactionId) || SAMPLE_REACTIONS[0];
-  const additional = SAMPLE_REACTIONS.filter(
-    (r) => r.sourceId === source.id && r.id !== primaryReaction.id
-  ).slice(0, 4);
+    const source = SAMPLE_SOURCES.find((s) => s.id === sourceId) || SAMPLE_SOURCES[0];
+    const primaryReaction = SAMPLE_REACTIONS.find((r) => r.id === reactionId) || SAMPLE_REACTIONS[0];
+    const additional = SAMPLE_REACTIONS.filter(
+      (r) => r.sourceId === source.id && r.id !== primaryReaction.id
+    ).slice(0, 4);
 
-  const { room, hostToken } = partyManager.createRoom({
-    title: title || `${primaryReaction.creator}'s Watch Party`,
-    hostName: hostName || 'Host',
-    sourceVideo: source,
-    primaryReaction,
-    additionalReactions: additional,
-  });
+    const { room, hostToken, participantToken } = await partyManager.createRoom({
+      title: title || `${primaryReaction.creator}'s Watch Party`,
+      hostName: hostName || 'Host',
+      sourceVideo: source,
+      primaryReaction,
+      additionalReactions: additional,
+    });
 
-  // Return both room and private hostToken ONLY to creator
-  res.status(201).json({
-    room,
-    hostToken,
-  });
+    // Return room, hostToken, and host's participantToken
+    res.status(201).json({
+      room,
+      hostToken,
+      participantToken,
+    });
+  } catch (err) {
+    console.error('Error creating watch party:', err);
+    res.status(500).json({ error: 'Failed to create watch party' });
+  }
 });
 
 // Get room details by ID or 6-digit Code (safe view - hostToken NEVER exposed)
-app.get('/api/parties/:id', (req: Request, res: Response) => {
-  const room = partyManager.getRoom(req.params.id);
-  if (!room) {
-    return res.status(404).json({ error: 'Watch party not found' });
-  }
+app.get('/api/parties/:id', async (req: Request, res: Response) => {
+  try {
+    const room = await partyManager.getRoom(req.params.id);
+    if (!room) {
+      return res.status(404).json({ error: 'Watch party not found' });
+    }
 
-  // Calculate estimated current playback time for smooth catch-up
-  const estimatedTime = partyManager.estimateCurrentSourceTime(room.playbackState);
-  res.json({
-    room,
-    estimatedSourceTime: estimatedTime,
-  });
+    const estimatedTime = partyManager.estimateCurrentSourceTime(room.playbackState);
+    res.json({
+      room,
+      estimatedSourceTime: estimatedTime,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Error fetching watch party' });
+  }
 });
 
-// Join room as viewer
-app.post('/api/parties/:id/join', (req: Request, res: Response) => {
-  const { participantName } = req.body;
-  const result = partyManager.joinRoom(req.params.id, participantName || 'Guest Viewer');
-  if (!result) {
-    return res.status(404).json({ error: 'Watch party not found' });
+// Join room as viewer (supports reconnect via participantToken / existingToken)
+app.post('/api/parties/:id/join', async (req: Request, res: Response) => {
+  try {
+    const { participantName } = req.body;
+    const existingToken = extractParticipantToken(req);
+
+    const result = await partyManager.joinRoom(
+      req.params.id,
+      participantName || 'Guest Viewer',
+      existingToken || undefined
+    );
+
+    if (!result) {
+      return res.status(404).json({ error: 'Watch party not found' });
+    }
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Error joining watch party' });
   }
-  res.json(result);
 });
 
 // Execute authoritative host playback command (Host ONLY)
-app.post('/api/parties/:id/command', (req: Request, res: Response) => {
-  const token = extractHostToken(req);
-  if (!token) {
-    return res.status(401).json({ error: 'Host authorization token is required' });
+app.post('/api/parties/:id/command', async (req: Request, res: Response) => {
+  try {
+    const token = extractHostToken(req);
+    if (!token) {
+      return res.status(401).json({ error: 'Host authorization token is required' });
+    }
+
+    const { command, sourceTime, playbackRate } = req.body;
+    const result = await partyManager.executeHostCommand(req.params.id, token, {
+      command,
+      sourceTime,
+      playbackRate,
+    });
+
+    if (!result.success) {
+      return res.status(403).json({ error: result.error });
+    }
+
+    res.json({ success: true, playbackState: result.state });
+  } catch (err) {
+    res.status(500).json({ error: 'Error executing playback command' });
   }
-
-  const { command, sourceTime, playbackRate } = req.body;
-  const result = partyManager.executeHostCommand(req.params.id, token, {
-    command,
-    sourceTime,
-    playbackRate,
-  });
-
-  if (!result.success) {
-    return res.status(403).json({ error: result.error });
-  }
-
-  res.json({ success: true, playbackState: result.state });
 });
 
-// Send chat message
-app.post('/api/parties/:id/chat', (req: Request, res: Response) => {
-  const { senderId, senderName, text } = req.body;
-  const token = extractHostToken(req);
+// Send chat message (Sender identity derived strictly from server participant session)
+app.post('/api/parties/:id/chat', async (req: Request, res: Response) => {
+  try {
+    const participantToken = extractParticipantToken(req);
+    if (!participantToken) {
+      return res.status(401).json({
+        error: 'Unauthorized: valid participant session token required to send chat messages',
+      });
+    }
 
-  const result = partyManager.addChatMessage(
-    req.params.id,
-    senderId || 'anon',
-    senderName || 'Viewer',
-    text || '',
-    token
-  );
+    const { text } = req.body;
+    const result = await partyManager.addChatMessage(
+      req.params.id,
+      participantToken,
+      text || ''
+    );
 
-  if (!result.success) {
-    return res.status(400).json({ error: result.error });
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    res.status(201).json(result.message);
+  } catch (err) {
+    res.status(500).json({ error: 'Error sending chat message' });
   }
-
-  res.status(201).json(result.message);
 });
 
-// Add timestamped note
-app.post('/api/parties/:id/notes', (req: Request, res: Response) => {
-  const { userId, userName, sourceTime, reactionTime, text } = req.body;
-  const result = partyManager.addNote(
-    req.params.id,
-    userId || 'anon',
-    userName || 'Viewer',
-    parseFloat(sourceTime) || 0,
-    parseFloat(reactionTime) || 0,
-    text || ''
-  );
+// Add timestamped note (Ownership derived strictly from server participant session)
+app.post('/api/parties/:id/notes', async (req: Request, res: Response) => {
+  try {
+    const participantToken = extractParticipantToken(req);
+    if (!participantToken) {
+      return res.status(401).json({
+        error: 'Unauthorized: valid participant session token required to record notes',
+      });
+    }
 
-  if (!result.success) {
-    return res.status(400).json({ error: result.error });
+    const { sourceTime, reactionTime, text } = req.body;
+    const result = await partyManager.addNote(
+      req.params.id,
+      participantToken,
+      parseFloat(sourceTime) || 0,
+      parseFloat(reactionTime) || 0,
+      text || ''
+    );
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    res.status(201).json(result.note);
+  } catch (err) {
+    res.status(500).json({ error: 'Error adding note' });
   }
-
-  res.status(201).json(result.note);
 });
 
 // Delete note (owner or host only)
-app.delete('/api/parties/:id/notes/:noteId', (req: Request, res: Response) => {
-  const token = extractHostToken(req);
-  const userId = (req.query.userId || req.body?.userId || '').toString();
+app.delete('/api/parties/:id/notes/:noteId', async (req: Request, res: Response) => {
+  try {
+    const hostToken = extractHostToken(req);
+    const participantToken = extractParticipantToken(req);
 
-  const result = partyManager.deleteNote(req.params.id, req.params.noteId, userId, token);
-  if (!result.success) {
-    return res.status(403).json({ error: result.error });
+    const result = await partyManager.deleteNote(
+      req.params.id,
+      req.params.noteId,
+      participantToken || undefined,
+      hostToken || undefined
+    );
+
+    if (!result.success) {
+      return res.status(403).json({ error: result.error });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Error deleting note' });
   }
+});
 
-  res.json({ success: true });
+// Reassign host
+app.post('/api/parties/:id/reassign-host', async (req: Request, res: Response) => {
+  try {
+    const currentHostToken = extractHostToken(req);
+    const { targetParticipantId } = req.body;
+
+    if (!currentHostToken) {
+      return res.status(401).json({ error: 'Current host token is required' });
+    }
+
+    const result = await partyManager.reassignHost(
+      req.params.id,
+      currentHostToken,
+      targetParticipantId
+    );
+
+    if (!result.success) {
+      return res.status(403).json({ error: result.error });
+    }
+
+    res.json({ success: true, newHostToken: result.newHostToken });
+  } catch (err) {
+    res.status(500).json({ error: 'Error reassigning host' });
+  }
 });
 
 // CSV tools for Creator Studio
@@ -217,6 +321,22 @@ app.post('/api/reactions/import-csv', (req: Request, res: Response) => {
 // ==========================================
 
 async function startServer() {
+  // Seed featured demo party if none exists
+  try {
+    const existing = await partyManager.getRoom('room-featured-demo');
+    if (!existing) {
+      await partyManager.createRoom({
+        title: '🔥 Live Film Breakdown: Aethelgard Reveal',
+        hostName: 'Marcus Vance',
+        sourceVideo: SAMPLE_SOURCES[0],
+        primaryReaction: SAMPLE_REACTIONS[0],
+        additionalReactions: [SAMPLE_REACTIONS[1], SAMPLE_REACTIONS[2]],
+      });
+    }
+  } catch (err) {
+    console.warn('Initial room seed notice:', err);
+  }
+
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({

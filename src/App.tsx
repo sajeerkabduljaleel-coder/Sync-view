@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { VideoSource, ReactionVideo, UserAccount } from './types';
-import { SAMPLE_SOURCES, SAMPLE_REACTIONS } from './data/mockCatalogue';
+import { catalogueService } from './services/catalogueService';
+import { authService } from './services/authService';
 import { Navigation } from './components/Navigation';
 import { ViewerHome } from './components/viewer/ViewerHome';
 import { ExploreView } from './components/viewer/ExploreView';
@@ -18,13 +19,22 @@ import { Theatre } from './components/theatre/Theatre';
 import { AuthModal } from './components/auth/AuthModal';
 
 export default function App() {
-  const [mode, setMode] = useState<'viewer' | 'reactor'>('viewer');
+  // Mode persistence (Viewer vs Reactor)
+  const [mode, setMode] = useState<'viewer' | 'reactor'>(() => {
+    try {
+      const saved = localStorage.getItem('syncview_active_mode');
+      return saved === 'reactor' ? 'reactor' : 'viewer';
+    } catch {
+      return 'viewer';
+    }
+  });
+
   const [viewerTab, setViewerTab] = useState<'home' | 'explore' | 'parties' | 'library'>('home');
   const [reactorTab, setReactorTab] = useState<'home' | 'my-reactions' | 'create' | 'studio'>('home');
 
-  // App Content state
-  const [sources, setSources] = useState<VideoSource[]>(SAMPLE_SOURCES);
-  const [reactions, setReactions] = useState<ReactionVideo[]>(SAMPLE_REACTIONS);
+  // App Content state loaded from CatalogueService
+  const [sources, setSources] = useState<VideoSource[]>([]);
+  const [reactions, setReactions] = useState<ReactionVideo[]>([]);
 
   // Theatre modal/screen state
   const [theatreState, setTheatreState] = useState<{
@@ -37,21 +47,50 @@ export default function App() {
   } | null>(null);
 
   // Active reaction for Creator Studio calibration
-  const [activeStudioReaction, setActiveStudioReaction] = useState<ReactionVideo>(SAMPLE_REACTIONS[0]);
+  const [activeStudioReaction, setActiveStudioReaction] = useState<ReactionVideo | null>(null);
 
-  // User Profile
-  const [currentUser, setCurrentUser] = useState<UserAccount>({
-    id: 'user-default-1',
-    name: 'Sajeer',
-    email: 'sajeer@syncview.tv',
-    role: 'viewer',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80',
-    savedReactions: ['rx-scifi-marcus', 'rx-gaming-leo'],
-    recentHistory: [],
-    drafts: [],
-  });
-
+  // User Profile from AuthService (No hardcoded demo user!)
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(authService.getUser());
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [authInitialTab, setAuthInitialTab] = useState<'signin' | 'register' | 'profile'>('signin');
+
+  // Initialize Auth & Catalogue
+  useEffect(() => {
+    // Session restoration
+    authService.init().then((user) => {
+      setCurrentUser(user);
+    });
+
+    const unsub = authService.subscribe((user) => {
+      setCurrentUser(user);
+    });
+
+    // Catalogue loading
+    const loadCatalogue = async () => {
+      const [srcs, rxs] = await Promise.all([
+        catalogueService.getSources(),
+        catalogueService.getReactions(),
+      ]);
+      setSources(srcs);
+      setReactions(rxs);
+      if (rxs.length > 0) {
+        setActiveStudioReaction(rxs[0]);
+      }
+    };
+    loadCatalogue();
+
+    return unsub;
+  }, []);
+
+  // Persist Mode Changes
+  const handleSwitchMode = (newMode: 'viewer' | 'reactor') => {
+    setMode(newMode);
+    try {
+      localStorage.setItem('syncview_active_mode', newMode);
+    } catch {}
+    if (newMode === 'viewer') setViewerTab('home');
+    else setReactorTab('home');
+  };
 
   // Actions
   const handleWatchInTheatre = (
@@ -93,24 +132,27 @@ export default function App() {
     } catch {}
 
     // Fallback if network call fails in offline demo
-    setTheatreState({
-      active: true,
-      source: sources[0],
-      primaryReaction: reactions[0],
-      extraReactions: reactions.slice(1, 3),
-      isHost: false,
-      roomCode,
-    });
+    if (sources.length > 0 && reactions.length > 0) {
+      setTheatreState({
+        active: true,
+        source: sources[0],
+        primaryReaction: reactions[0],
+        extraReactions: reactions.slice(1, 3),
+        isHost: false,
+        roomCode,
+      });
+    }
   };
 
   const handleCreateParty = async (source: VideoSource, reaction: ReactionVideo) => {
+    const hostName = currentUser ? currentUser.name : 'Host';
     try {
       const res = await fetch('/api/parties', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: `${reaction.creator}'s Watch Party`,
-          hostName: currentUser.name,
+          hostName,
           sourceId: source.id,
           reactionId: reaction.id,
         }),
@@ -141,18 +183,29 @@ export default function App() {
     });
   };
 
-  const handleSaveCalibratedReaction = (updated: ReactionVideo) => {
+  const handleSaveCalibratedReaction = async (updated: ReactionVideo) => {
+    await catalogueService.saveReaction(updated);
     setReactions((prev) =>
       prev.map((r) => (r.id === updated.id ? updated : r))
     );
     setActiveStudioReaction(updated);
   };
 
-  const handleWizardComplete = (newReaction: ReactionVideo, source: VideoSource) => {
+  const handleWizardComplete = async (newReaction: ReactionVideo, _source: VideoSource) => {
+    await catalogueService.saveReaction(newReaction);
     setReactions((prev) => [newReaction, ...prev]);
-    // Prompt into studio or theatre
     setActiveStudioReaction(newReaction);
     setReactorTab('studio');
+  };
+
+  // Protected action helper
+  const handleStartCreateReaction = () => {
+    if (!authService.isAuthenticated()) {
+      setAuthInitialTab('signin');
+      setIsAuthOpen(true);
+      return;
+    }
+    setReactorTab('create');
   };
 
   // If Theatre is active, it takes over the viewport for focused viewing
@@ -175,25 +228,25 @@ export default function App() {
     );
   }
 
-  const activeSourceForStudio =
-    sources.find((s) => s.id === activeStudioReaction.sourceId) || sources[0];
+  const activeSourceForStudio = activeStudioReaction
+    ? sources.find((s) => s.id === activeStudioReaction.sourceId) || sources[0]
+    : sources[0];
 
   return (
     <div className="min-h-screen bg-[#07090e] text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
       {/* Top Navigation */}
       <Navigation
         currentMode={mode}
-        onSwitchMode={(newMode) => {
-          setMode(newMode);
-          if (newMode === 'viewer') setViewerTab('home');
-          else setReactorTab('home');
-        }}
+        onSwitchMode={handleSwitchMode}
         viewerTab={viewerTab}
         onSelectViewerTab={(tab) => setViewerTab(tab)}
         reactorTab={reactorTab}
         onSelectReactorTab={(tab) => setReactorTab(tab)}
         currentUser={currentUser}
-        onOpenAuth={() => setIsAuthOpen(true)}
+        onOpenAuth={(tab) => {
+          setAuthInitialTab(tab || (currentUser ? 'profile' : 'signin'));
+          setIsAuthOpen(true);
+        }}
       />
 
       {/* Main View Router */}
@@ -207,10 +260,7 @@ export default function App() {
                 onWatch={handleWatchInTheatre}
                 onJoinPartyByCode={handleJoinParty}
                 onCreateParty={handleCreateParty}
-                onSwitchToReactor={() => {
-                  setMode('reactor');
-                  setReactorTab('home');
-                }}
+                onSwitchToReactor={() => handleSwitchMode('reactor')}
               />
             )}
             {viewerTab === 'explore' && (
@@ -242,7 +292,7 @@ export default function App() {
               <ReactorHome
                 reactions={reactions}
                 sources={sources}
-                onStartCreate={() => setReactorTab('create')}
+                onStartCreate={handleStartCreateReaction}
                 onOpenStudio={(rx) => {
                   setActiveStudioReaction(rx);
                   setReactorTab('studio');
@@ -257,7 +307,7 @@ export default function App() {
               <ReactorHome
                 reactions={reactions}
                 sources={sources}
-                onStartCreate={() => setReactorTab('create')}
+                onStartCreate={handleStartCreateReaction}
                 onOpenStudio={(rx) => {
                   setActiveStudioReaction(rx);
                   setReactorTab('studio');
@@ -274,7 +324,7 @@ export default function App() {
                 onCancel={() => setReactorTab('home')}
               />
             )}
-            {reactorTab === 'studio' && (
+            {reactorTab === 'studio' && activeStudioReaction && activeSourceForStudio && (
               <CreatorStudio
                 sourceVideo={activeSourceForStudio}
                 reaction={activeStudioReaction}
@@ -294,8 +344,10 @@ export default function App() {
       <AuthModal
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
-        currentUser={currentUser}
-        onUpdateUser={(updated) => setCurrentUser(updated)}
+        initialTab={authInitialTab}
+        onSuccess={(user) => {
+          setCurrentUser(user);
+        }}
       />
     </div>
   );

@@ -17,6 +17,7 @@ import {
   Sparkles,
   Layers,
   Download,
+  LogIn,
 } from 'lucide-react';
 
 interface NavigationProps {
@@ -26,8 +27,8 @@ interface NavigationProps {
   onSelectViewerTab: (tab: 'home' | 'explore' | 'parties' | 'library') => void;
   reactorTab: 'home' | 'my-reactions' | 'create' | 'studio';
   onSelectReactorTab: (tab: 'home' | 'my-reactions' | 'create' | 'studio') => void;
-  currentUser: UserAccount;
-  onOpenAuth: () => void;
+  currentUser: UserAccount | null;
+  onOpenAuth: (initialTab?: 'signin' | 'register' | 'profile') => void;
 }
 
 export function Navigation({
@@ -184,7 +185,7 @@ export function Navigation({
           )}
         </nav>
 
-        {/* Right: Download Source & User Profile */}
+        {/* Right: Download Source & User Profile or Sign In */}
         <div className="flex items-center gap-2 sm:gap-3">
           <a
             href="/api/download-source"
@@ -196,20 +197,30 @@ export function Navigation({
             <span>Download Source</span>
           </a>
 
-          <button
-            onClick={onOpenAuth}
-            className="flex items-center gap-2 p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-colors cursor-pointer"
-            title="Account & Profile Settings"
-          >
-            <img
-              src={currentUser.avatar}
-              alt=""
-              className="w-6 h-6 rounded-full object-cover ring-1 ring-slate-700"
-            />
-            <span className="text-xs font-semibold text-slate-200 hidden sm:inline">
-              {currentUser.name}
-            </span>
-          </button>
+          {currentUser ? (
+            <button
+              onClick={() => onOpenAuth('profile')}
+              className="flex items-center gap-2 p-1.5 px-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-colors cursor-pointer"
+              title="Account & Profile Settings"
+            >
+              <img
+                src={currentUser.avatar}
+                alt=""
+                className="w-6 h-6 rounded-full object-cover ring-1 ring-slate-700"
+              />
+              <span className="text-xs font-semibold text-slate-200 hidden sm:inline">
+                {currentUser.name}
+              </span>
+            </button>
+          ) : (
+            <button
+              onClick={() => onOpenAuth('signin')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-md shadow-indigo-600/30 transition-all cursor-pointer"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Sign In</span>
+            </button>
+          )}
         </div>
       </div>
     </header>

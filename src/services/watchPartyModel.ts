@@ -3,14 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { WatchParty, WatchPartyParticipant, ChatMessage, ReactionNote, VideoSource, ReactionVideo } from '../types';
 import crypto from 'node:crypto';
-
-export interface RoomStateSecure {
-  room: WatchParty;
-  hostToken: string; // Stored securely on server, never returned in public room queries
-  lastActivity: number;
-}
+import { WatchParty, WatchPartyParticipant, ChatMessage, ReactionNote, VideoSource, ReactionVideo } from '../types';
+import {
+  IWatchPartyRepository,
+  FileWatchPartyRepository,
+  StoredRoomData,
+  ParticipantSession,
+} from './watchPartyRepository';
 
 export interface PlaybackCommand {
   command: 'play' | 'pause' | 'seek' | 'rate' | 'change_media';
@@ -19,20 +19,17 @@ export interface PlaybackCommand {
   sourceId?: string;
   reactionId?: string;
   clientTimestamp?: number;
+  expectedSeq?: number;
 }
 
-/**
- * In-memory room store with lifecycle and cleanup management.
- */
 export class WatchPartyManager {
-  private rooms: Map<string, RoomStateSecure> = new Map();
+  private repository: IWatchPartyRepository;
   private readonly roomTtlMs = 1000 * 60 * 60 * 24; // 24 hours
 
-  constructor() {}
+  constructor(repository?: IWatchPartyRepository) {
+    this.repository = repository || new FileWatchPartyRepository();
+  }
 
-  /**
-   * Generates a 6-character human-friendly room code.
-   */
   public generateRoomCode(): string {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
@@ -43,41 +40,63 @@ export class WatchPartyManager {
     return code;
   }
 
-  /**
-   * Generates a cryptographically secure host token.
-   */
-  public generateHostToken(): string {
+  public generateSecureToken(): string {
     return crypto.randomBytes(32).toString('hex');
   }
 
   /**
-   * Creates a new watch party. Returns the full room and hostToken.
+   * Constant-time string equality check to mitigate timing attacks.
    */
-  public createRoom(params: {
+  public safeCompare(a?: string | null, b?: string | null): boolean {
+    if (!a || !b) return false;
+    const bufA = Buffer.from(a);
+    const bufB = Buffer.from(b);
+    if (bufA.length !== bufB.length) return false;
+    return crypto.timingSafeEqual(bufA, bufB);
+  }
+
+  /**
+   * Creates a new watch party.
+   * Host credentials and participant tokens are created server-side.
+   */
+  public async createRoom(params: {
     title: string;
     hostName: string;
     sourceVideo: VideoSource;
     primaryReaction: ReactionVideo;
     additionalReactions?: ReactionVideo[];
-  }): { room: WatchParty; hostToken: string } {
+  }): Promise<{ room: WatchParty; hostToken: string; participantToken: string }> {
     const roomId = `room-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
     const roomCode = this.generateRoomCode();
-    const hostToken = this.generateHostToken();
+    const hostToken = this.generateSecureToken();
+    const participantToken = this.generateSecureToken();
     const hostId = `host-${Date.now()}`;
     const now = Date.now();
 
     const hostParticipant: WatchPartyParticipant = {
       id: hostId,
-      name: (params.hostName || 'Host').slice(0, 30),
+      name: (params.hostName || 'Host').trim().slice(0, 30),
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80',
       isHost: true,
       joinedAt: now,
       status: 'watching',
     };
 
+    const hostSession: ParticipantSession = {
+      token: participantToken,
+      participantId: hostId,
+      name: hostParticipant.name,
+      avatar: hostParticipant.avatar,
+      isHost: true,
+      roomId,
+      joinedAt: now,
+      lastMessageTime: 0,
+      messageWindowCount: 0,
+    };
+
     const room: WatchParty = {
       id: roomId,
-      title: (params.title || 'Synchronized Watch Party').slice(0, 80),
+      title: (params.title || 'Synchronized Watch Party').trim().slice(0, 80),
       roomCode,
       hostId,
       hostName: hostParticipant.name,
@@ -108,38 +127,57 @@ export class WatchPartyManager {
       createdAt: now,
     };
 
-    this.rooms.set(roomId, {
+    const storedData: StoredRoomData = {
       room,
       hostToken,
+      sessions: {
+        [participantToken]: hostSession,
+      },
       lastActivity: now,
-    });
+    };
 
-    return { room, hostToken };
+    await this.repository.saveRoom(storedData);
+    return { room: this.sanitizeRoom(room), hostToken, participantToken };
   }
 
   /**
-   * Retrieves sanitized public room state (hostToken is never returned).
+   * Fetches room state, sanitized to ensure host tokens and session tokens are NEVER leaked.
    */
-  public getRoom(roomIdOrCode: string): WatchParty | null {
-    this.cleanExpiredRooms();
-    const match = this.findRoomEntry(roomIdOrCode);
-    if (!match) return null;
-    return JSON.parse(JSON.stringify(match.room));
+  public async getRoom(idOrCode: string): Promise<WatchParty | null> {
+    const data = await this.findRoomData(idOrCode);
+    if (!data) return null;
+    return this.sanitizeRoom(data.room);
   }
 
   /**
-   * Join an existing room as an audience participant.
+   * Join an existing room.
+   * If existingToken is valid, reconnects the existing participant without duplicating them.
    */
-  public joinRoom(
-    roomIdOrCode: string,
-    participantName: string
-  ): { room: WatchParty; participantId: string } | null {
-    const entry = this.findRoomEntry(roomIdOrCode);
-    if (!entry) return null;
+  public async joinRoom(
+    idOrCode: string,
+    participantName: string,
+    existingToken?: string
+  ): Promise<{ room: WatchParty; participantId: string; participantToken: string } | null> {
+    const data = await this.findRoomData(idOrCode);
+    if (!data) return null;
+
+    const now = Date.now();
+
+    // Reconnection check
+    if (existingToken && data.sessions[existingToken]) {
+      const existingSession = data.sessions[existingToken];
+      data.lastActivity = now;
+      await this.repository.saveRoom(data);
+      return {
+        room: this.sanitizeRoom(data.room),
+        participantId: existingSession.participantId,
+        participantToken: existingToken,
+      };
+    }
 
     const safeName = (participantName || 'Guest Viewer').trim().slice(0, 30);
     const participantId = `viewer-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
-    const now = Date.now();
+    const participantToken = this.generateSecureToken();
 
     const participant: WatchPartyParticipant = {
       id: participantId,
@@ -150,11 +188,25 @@ export class WatchPartyManager {
       status: 'watching',
     };
 
-    entry.room.participants.push(participant);
-    entry.lastActivity = now;
+    const session: ParticipantSession = {
+      token: participantToken,
+      participantId,
+      name: safeName,
+      avatar: participant.avatar,
+      isHost: false,
+      roomId: data.room.id,
+      joinedAt: now,
+      lastMessageTime: 0,
+      messageWindowCount: 0,
+    };
 
-    // Post join notification
-    entry.room.chatMessages.push({
+    // Deduplicate participant list by ID
+    data.room.participants = data.room.participants.filter((p) => p.id !== participantId);
+    data.room.participants.push(participant);
+    data.sessions[participantToken] = session;
+    data.lastActivity = now;
+
+    data.room.chatMessages.push({
       id: `msg-${now}`,
       senderId: 'system',
       senderName: 'SyncView Bot',
@@ -164,42 +216,39 @@ export class WatchPartyManager {
       isHost: false,
     });
 
+    await this.repository.saveRoom(data);
+
     return {
-      room: JSON.parse(JSON.stringify(entry.room)),
+      room: this.sanitizeRoom(data.room),
       participantId,
+      participantToken,
     };
   }
 
-  /**
-   * Validates host token securely.
-   */
-  public isAuthorizedHost(roomIdOrCode: string, token: string): boolean {
-    const entry = this.findRoomEntry(roomIdOrCode);
-    if (!entry || !token) return false;
-    // Constant-time comparison to prevent timing attacks
-    const bufferA = Buffer.from(entry.hostToken);
-    const bufferB = Buffer.from(token);
-    if (bufferA.length !== bufferB.length) return false;
-    return crypto.timingSafeEqual(bufferA, bufferB);
+  public async isAuthorizedHost(idOrCode: string, token: string): Promise<boolean> {
+    const data = await this.findRoomData(idOrCode);
+    if (!data || !token) return false;
+    return this.safeCompare(data.hostToken, token);
   }
 
   /**
-   * Applies an authoritative playback command (Host only).
+   * Applies authoritative playback command (Host ONLY).
+   * Monotonically increments sequence numbers and records server timestamps.
    */
-  public executeHostCommand(
-    roomIdOrCode: string,
+  public async executeHostCommand(
+    idOrCode: string,
     token: string,
     cmd: PlaybackCommand
-  ): { success: boolean; state?: WatchParty['playbackState']; error?: string } {
-    const entry = this.findRoomEntry(roomIdOrCode);
-    if (!entry) return { success: false, error: 'Room not found' };
+  ): Promise<{ success: boolean; state?: WatchParty['playbackState']; error?: string }> {
+    const data = await this.findRoomData(idOrCode);
+    if (!data) return { success: false, error: 'Room not found' };
 
-    if (!this.isAuthorizedHost(roomIdOrCode, token)) {
-      return { success: false, error: 'Unauthorized: invalid host credentials' };
+    if (!this.safeCompare(data.hostToken, token)) {
+      return { success: false, error: 'Unauthorized: valid host credentials required' };
     }
 
     const now = Date.now();
-    const current = entry.room.playbackState;
+    const current = data.room.playbackState;
 
     let newIsPlaying = current.isPlaying;
     let newSourceTime = current.sourceTime;
@@ -230,162 +279,201 @@ export class WatchPartyManager {
         break;
     }
 
-    // Monotonically increment sequence number
     const nextSeq = current.seq + 1;
 
-    entry.room.playbackState = {
+    data.room.playbackState = {
       isPlaying: newIsPlaying,
       sourceTime: Math.max(0, newSourceTime),
       playbackRate: newRate,
       seq: nextSeq,
       serverTimestamp: now,
     };
-    entry.lastActivity = now;
+    data.lastActivity = now;
+
+    await this.repository.saveRoom(data);
 
     return {
       success: true,
-      state: entry.room.playbackState,
+      state: data.room.playbackState,
     };
   }
 
   /**
-   * Adds chat message with rate limit check and sanitization.
+   * Adds chat message with server-derived identity, rate-limiting, and content sanitization.
+   * Client-supplied senderId and senderName are REJECTED to prevent identity spoofing.
    */
-  public addChatMessage(
-    roomIdOrCode: string,
-    senderId: string,
-    senderName: string,
-    text: string,
-    token?: string
-  ): { success: boolean; message?: ChatMessage; error?: string } {
-    const entry = this.findRoomEntry(roomIdOrCode);
-    if (!entry) return { success: false, error: 'Room not found' };
+  public async addChatMessage(
+    idOrCode: string,
+    participantToken: string,
+    text: string
+  ): Promise<{ success: boolean; message?: ChatMessage; error?: string }> {
+    const data = await this.findRoomData(idOrCode);
+    if (!data) return { success: false, error: 'Room not found' };
 
-    const cleanText = text.trim().slice(0, 500);
-    if (!cleanText) return { success: false, error: 'Message cannot be empty' };
+    const session = data.sessions[participantToken];
+    if (!session) {
+      return { success: false, error: 'Unauthorized: valid participant session required to post messages' };
+    }
 
-    const isHost = token ? this.isAuthorizedHost(roomIdOrCode, token) : false;
+    const cleanText = (text || '').trim().slice(0, 500);
+    if (!cleanText) {
+      return { success: false, error: 'Message cannot be empty' };
+    }
+
     const now = Date.now();
 
+    // Sliding window rate limit: max 5 messages per 3000ms, min 250ms interval
+    if (now - session.lastMessageTime < 250) {
+      return { success: false, error: 'Please slow down; message sent too quickly' };
+    }
+
+    if (now - session.lastMessageTime > 3000) {
+      session.messageWindowCount = 1;
+    } else {
+      session.messageWindowCount++;
+      if (session.messageWindowCount > 5) {
+        return { success: false, error: 'Rate limit exceeded: maximum 5 messages per 3 seconds' };
+      }
+    }
+    session.lastMessageTime = now;
+
+    // Sender identity is strictly derived from server session!
     const msg: ChatMessage = {
       id: `msg-${now}-${crypto.randomBytes(2).toString('hex')}`,
-      senderId,
-      senderName: senderName.slice(0, 30),
-      avatar: isHost
-        ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80'
-        : `https://api.dicebear.com/7.x/bottts/svg?seed=${senderId}`,
+      senderId: session.participantId,
+      senderName: session.name,
+      avatar: session.avatar,
       text: cleanText,
       timestamp: now,
-      isHost,
+      isHost: session.isHost,
     };
 
-    entry.room.chatMessages.push(msg);
-    // Keep max 200 messages in buffer
-    if (entry.room.chatMessages.length > 200) {
-      entry.room.chatMessages.shift();
+    data.room.chatMessages.push(msg);
+    if (data.room.chatMessages.length > 200) {
+      data.room.chatMessages.shift();
     }
-    entry.lastActivity = now;
+    data.lastActivity = now;
 
+    await this.repository.saveRoom(data);
     return { success: true, message: msg };
   }
 
   /**
-   * Add a timestamped note. Validates ownership and timestamp.
+   * Adds timestamped note with server-derived user identity.
    */
-  public addNote(
-    roomIdOrCode: string,
-    userId: string,
-    userName: string,
+  public async addNote(
+    idOrCode: string,
+    participantToken: string,
     sourceTime: number,
     reactionTime: number,
     text: string
-  ): { success: boolean; note?: ReactionNote; error?: string } {
-    const entry = this.findRoomEntry(roomIdOrCode);
-    if (!entry) return { success: false, error: 'Room not found' };
+  ): Promise<{ success: boolean; note?: ReactionNote; error?: string }> {
+    const data = await this.findRoomData(idOrCode);
+    if (!data) return { success: false, error: 'Room not found' };
 
-    const cleanText = text.trim().slice(0, 280);
-    if (!cleanText) return { success: false, error: 'Note cannot be empty' };
+    const session = data.sessions[participantToken];
+    if (!session) {
+      return { success: false, error: 'Unauthorized: valid participant session required to add notes' };
+    }
 
+    if (data.room.notes.length >= 100) {
+      return { success: false, error: 'Room note limit reached (maximum 100 notes per room)' };
+    }
+
+    const cleanText = (text || '').trim().slice(0, 280);
+    if (!cleanText) {
+      return { success: false, error: 'Note text cannot be empty' };
+    }
+
+    const now = Date.now();
     const note: ReactionNote = {
-      id: `note-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
-      userId,
-      userName: userName.slice(0, 30),
+      id: `note-${now}-${crypto.randomBytes(3).toString('hex')}`,
+      userId: session.participantId, // Derived from server session
+      userName: session.name,
       sourceTimestamp: Math.max(0, sourceTime),
       reactionTimestamp: Math.max(0, reactionTime),
       text: cleanText,
       isPublic: true,
-      createdAt: Date.now(),
+      createdAt: now,
     };
 
-    entry.room.notes.push(note);
-    entry.lastActivity = Date.now();
+    data.room.notes.push(note);
+    data.lastActivity = now;
 
+    await this.repository.saveRoom(data);
     return { success: true, note };
   }
 
   /**
-   * Delete note with ownership validation (owner or host).
+   * Deletes note with ownership or host verification.
+   * Only the note creator (via participantToken) or the room host (via hostToken) can delete.
    */
-  public deleteNote(
-    roomIdOrCode: string,
+  public async deleteNote(
+    idOrCode: string,
     noteId: string,
-    userId: string,
-    token?: string
-  ): { success: boolean; error?: string } {
-    const entry = this.findRoomEntry(roomIdOrCode);
-    if (!entry) return { success: false, error: 'Room not found' };
+    participantToken?: string,
+    hostToken?: string
+  ): Promise<{ success: boolean; error?: string }> {
+    const data = await this.findRoomData(idOrCode);
+    if (!data) return { success: false, error: 'Room not found' };
 
-    const isHost = token ? this.isAuthorizedHost(roomIdOrCode, token) : false;
-    const noteIdx = entry.room.notes.findIndex((n) => n.id === noteId);
+    const noteIdx = data.room.notes.findIndex((n) => n.id === noteId);
     if (noteIdx === -1) return { success: false, error: 'Note not found' };
 
-    const note = entry.room.notes[noteIdx];
-    if (note.userId !== userId && !isHost) {
-      return { success: false, error: 'Unauthorized to delete note' };
+    const note = data.room.notes[noteIdx];
+    const isHost = this.safeCompare(data.hostToken, hostToken);
+    const session = participantToken ? data.sessions[participantToken] : null;
+    const isAuthor = session ? session.participantId === note.userId : false;
+
+    if (!isAuthor && !isHost) {
+      return { success: false, error: 'Unauthorized: only the author or the host can delete this note' };
     }
 
-    entry.room.notes.splice(noteIdx, 1);
-    entry.lastActivity = Date.now();
+    data.room.notes.splice(noteIdx, 1);
+    data.lastActivity = Date.now();
+
+    await this.repository.saveRoom(data);
     return { success: true };
   }
 
   /**
-   * Reassign host (e.g. if host leaves, grants host to another participant).
+   * Secure host reassignment. Old host issues new hostToken to target participant.
    */
-  public reassignHost(
-    roomIdOrCode: string,
-    currentToken: string,
-    newHostParticipantId: string
-  ): { success: boolean; newHostToken?: string; error?: string } {
-    const entry = this.findRoomEntry(roomIdOrCode);
-    if (!entry) return { success: false, error: 'Room not found' };
+  public async reassignHost(
+    idOrCode: string,
+    currentHostToken: string,
+    targetParticipantId: string
+  ): Promise<{ success: boolean; newHostToken?: string; error?: string }> {
+    const data = await this.findRoomData(idOrCode);
+    if (!data) return { success: false, error: 'Room not found' };
 
-    if (!this.isAuthorizedHost(roomIdOrCode, currentToken)) {
-      return { success: false, error: 'Unauthorized: invalid current host token' };
+    if (!this.safeCompare(data.hostToken, currentHostToken)) {
+      return { success: false, error: 'Unauthorized: current host credentials required' };
     }
 
-    const targetParticipant = entry.room.participants.find((p) => p.id === newHostParticipantId);
+    const targetParticipant = data.room.participants.find((p) => p.id === targetParticipantId);
     if (!targetParticipant) {
       return { success: false, error: 'Target participant not found in room' };
     }
 
-    // Demote current host
-    entry.room.participants.forEach((p) => {
-      p.isHost = p.id === newHostParticipantId;
+    // Update sessions and participants
+    for (const session of Object.values(data.sessions)) {
+      session.isHost = session.participantId === targetParticipantId;
+    }
+    data.room.participants.forEach((p) => {
+      p.isHost = p.id === targetParticipantId;
     });
 
-    const newHostToken = this.generateHostToken();
-    entry.hostToken = newHostToken;
-    entry.room.hostId = targetParticipant.id;
-    entry.room.hostName = targetParticipant.name;
-    entry.lastActivity = Date.now();
+    const newHostToken = this.generateSecureToken();
+    data.hostToken = newHostToken;
+    data.room.hostId = targetParticipant.id;
+    data.room.hostName = targetParticipant.name;
+    data.lastActivity = Date.now();
 
+    await this.repository.saveRoom(data);
     return { success: true, newHostToken };
   }
 
-  /**
-   * Estimates current playback time based on server timestamp and elapsed time.
-   */
   public estimateCurrentSourceTime(playbackState: WatchParty['playbackState']): number {
     if (!playbackState.isPlaying) {
       return playbackState.sourceTime;
@@ -394,25 +482,15 @@ export class WatchPartyManager {
     return playbackState.sourceTime + elapsedSeconds * playbackState.playbackRate;
   }
 
-  private findRoomEntry(idOrCode: string): RoomStateSecure | null {
-    if (this.rooms.has(idOrCode)) {
-      return this.rooms.get(idOrCode)!;
+  private async findRoomData(idOrCode: string): Promise<StoredRoomData | null> {
+    let data = await this.repository.getRoomById(idOrCode);
+    if (!data) {
+      data = await this.repository.getRoomByCode(idOrCode);
     }
-    const clean = idOrCode.toUpperCase().trim();
-    for (const entry of this.rooms.values()) {
-      if (entry.room.roomCode.toUpperCase() === clean) {
-        return entry;
-      }
-    }
-    return null;
+    return data;
   }
 
-  private cleanExpiredRooms(): void {
-    const now = Date.now();
-    for (const [id, entry] of this.rooms.entries()) {
-      if (now - entry.lastActivity > this.roomTtlMs) {
-        this.rooms.delete(id);
-      }
-    }
+  private sanitizeRoom(room: WatchParty): WatchParty {
+    return JSON.parse(JSON.stringify(room));
   }
 }
