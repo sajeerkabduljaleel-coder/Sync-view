@@ -1,0 +1,6 @@
+{
+  "name": "SyncView — Synchronized Reaction Video Platform",
+  "description": "Watch source content alongside synchronized creator reaction videos with intelligent multi-timeline drift correction, watch parties, and creator calibration studio.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
