@@ -50,6 +50,8 @@ interface TheatreProps {
   extraReactions?: ReactionVideo[];
   isHost?: boolean;
   roomCode?: string;
+  hostToken?: string;
+  participantToken?: string;
   onExit?: () => void;
   onOpenCreatorStudio?: (reaction: ReactionVideo) => void;
 }
@@ -60,11 +62,14 @@ export function Theatre({
   extraReactions: initialExtraReactions = [],
   isHost = true,
   roomCode,
+  hostToken,
+  participantToken,
   onExit,
   onOpenCreatorStudio,
 }: TheatreProps) {
   // Sync controller instance (authoritative engine)
   const controllerRef = useRef<SessionSyncController | null>(null);
+  const lastServerSeqRef = useRef<number>(0);
 
   const [primaryReaction, setPrimaryReaction] = useState<ReactionVideo>(initialPrimaryReaction);
   const [extraReactions, setExtraReactions] = useState<ReactionVideo[]>(initialExtraReactions);
@@ -91,6 +96,51 @@ export function Theatre({
 
   // Floating emoji reaction bursts
   const [emojiBursts, setEmojiBursts] = useState<{ id: number; emoji: string; x: number }[]>([]);
+
+  // Watch Party live sync polling
+  useEffect(() => {
+    if (!roomCode) return;
+
+    let isMounted = true;
+    const fetchPartyState = async () => {
+      try {
+        const res = await fetch(`/api/parties/${roomCode}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const room = data.room;
+        if (!isMounted || !room) return;
+
+        if (room.chatMessages) {
+          setChatMessages(room.chatMessages);
+        }
+        if (room.notes) {
+          setActiveNotes(room.notes);
+        }
+
+        // If not host, synchronize to host's authoritative playback state
+        if (!isHost && room.playbackState && controllerRef.current) {
+          const serverSeq = room.playbackState.seq;
+          if (serverSeq > lastServerSeqRef.current) {
+            lastServerSeqRef.current = serverSeq;
+            const estimatedTime = data.estimatedSourceTime ?? room.playbackState.sourceTime;
+            controllerRef.current.seekToSourceTime(estimatedTime);
+            if (room.playbackState.isPlaying) {
+              controllerRef.current.play();
+            } else {
+              controllerRef.current.pause();
+            }
+          }
+        }
+      } catch {}
+    };
+
+    fetchPartyState();
+    const interval = setInterval(fetchPartyState, 2500);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [roomCode, isHost]);
 
   // Initialize Controller
   useEffect(() => {
@@ -126,12 +176,50 @@ export function Theatre({
     }
   }, [primaryReaction, extraReactions]);
 
-  const handlePlayToggle = () => {
-    controllerRef.current?.togglePlay();
+  const handlePlayToggle = async () => {
+    if (!controllerRef.current) return;
+    const willPlay = !syncState?.isPlaying;
+    controllerRef.current.togglePlay();
+
+    if (roomCode && isHost && hostToken) {
+      try {
+        await fetch(`/api/parties/${roomCode}/command`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-host-token': hostToken,
+          },
+          body: JSON.stringify({
+            command: willPlay ? 'play' : 'pause',
+            sourceTime: controllerRef.current.getSourceTime(),
+          }),
+        });
+      } catch (err) {
+        console.warn('Failed to broadcast play command:', err);
+      }
+    }
   };
 
-  const handleSeek = (time: number) => {
+  const handleSeek = async (time: number) => {
     controllerRef.current?.seekToSourceTime(time);
+
+    if (roomCode && isHost && hostToken) {
+      try {
+        await fetch(`/api/parties/${roomCode}/command`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-host-token': hostToken,
+          },
+          body: JSON.stringify({
+            command: 'seek',
+            sourceTime: time,
+          }),
+        });
+      } catch (err) {
+        console.warn('Failed to broadcast seek command:', err);
+      }
+    }
   };
 
   const handleStepReaction = (delta: number) => {
@@ -160,16 +248,36 @@ export function Theatre({
     controllerRef.current?.setActiveReaction(newPrimary.id);
   };
 
-  const handleSendChat = (e?: React.FormEvent) => {
+  const handleSendChat = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!newChatText.trim()) return;
+    const text = newChatText.trim();
+    if (!text) return;
+
+    if (roomCode && participantToken) {
+      try {
+        const res = await fetch(`/api/parties/${roomCode}/chat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-participant-token': participantToken,
+          },
+          body: JSON.stringify({ text }),
+        });
+        if (res.ok) {
+          const msg: ChatMessage = await res.json();
+          setChatMessages((prev) => [...prev, msg]);
+          setNewChatText('');
+          return;
+        }
+      } catch {}
+    }
 
     const msg: ChatMessage = {
       id: `msg-${Date.now()}`,
       senderId: 'user-me',
       senderName: isHost ? 'You (Host)' : 'You',
       avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80',
-      text: newChatText.trim(),
+      text,
       timestamp: Date.now(),
       isHost,
     };
@@ -185,11 +293,35 @@ export function Theatre({
     }, 2000);
   };
 
-  const handleAddNote = (e: React.FormEvent) => {
+  const handleAddNote = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newNoteText.trim()) return;
+    const text = newNoteText.trim();
+    if (!text) return;
     const curSourceTime = syncState?.sourceTime || 0;
     const curRxTime = syncState?.primaryReactionTime || 0;
+
+    if (roomCode && participantToken) {
+      try {
+        const res = await fetch(`/api/parties/${roomCode}/notes`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-participant-token': participantToken,
+          },
+          body: JSON.stringify({
+            sourceTime: curSourceTime,
+            reactionTime: curRxTime,
+            text,
+          }),
+        });
+        if (res.ok) {
+          const note: ReactionNote = await res.json();
+          setActiveNotes((prev) => [note, ...prev]);
+          setNewNoteText('');
+          return;
+        }
+      } catch {}
+    }
 
     const note: ReactionNote = {
       id: `note-${Date.now()}`,
@@ -197,7 +329,7 @@ export function Theatre({
       userName: 'You',
       sourceTimestamp: curSourceTime,
       reactionTimestamp: curRxTime,
-      text: newNoteText.trim(),
+      text,
       isPublic: true,
       createdAt: Date.now(),
     };

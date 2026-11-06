@@ -44,6 +44,8 @@ export default function App() {
     extraReactions: ReactionVideo[];
     isHost?: boolean;
     roomCode?: string;
+    hostToken?: string;
+    participantToken?: string;
   } | null>(null);
 
   // Active reaction for Creator Studio calibration
@@ -114,10 +116,15 @@ export default function App() {
   };
 
   const handleJoinParty = async (roomCode: string) => {
+    const participantName = currentUser ? currentUser.name : 'Guest Viewer';
     try {
-      const res = await fetch(`/api/parties/${roomCode}`);
-      if (res.ok) {
-        const data = await res.json();
+      const joinRes = await fetch(`/api/parties/${roomCode}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participantName }),
+      });
+      if (joinRes.ok) {
+        const data = await joinRes.json();
         const party = data.room;
         setTheatreState({
           active: true,
@@ -126,6 +133,7 @@ export default function App() {
           extraReactions: party.additionalReactions || [],
           isHost: false,
           roomCode: party.roomCode,
+          participantToken: data.participantToken,
         });
         return;
       }
@@ -166,6 +174,8 @@ export default function App() {
           extraReactions: data.room.additionalReactions || [],
           isHost: true,
           roomCode: data.room.roomCode,
+          hostToken: data.hostToken,
+          participantToken: data.participantToken,
         });
         return;
       }
@@ -217,6 +227,8 @@ export default function App() {
         extraReactions={theatreState.extraReactions}
         isHost={theatreState.isHost}
         roomCode={theatreState.roomCode}
+        hostToken={theatreState.hostToken}
+        participantToken={theatreState.participantToken}
         onExit={() => setTheatreState(null)}
         onOpenCreatorStudio={(rx) => {
           setActiveStudioReaction(rx);

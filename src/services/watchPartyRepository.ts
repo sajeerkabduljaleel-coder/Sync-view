@@ -76,9 +76,16 @@ export class FileWatchPartyRepository implements IWatchPartyRepository {
   private flushToDisk(): void {
     try {
       const list = Array.from(this.cache.values());
-      const tempPath = `${this.filePath}.tmp`;
+      const tempPath = `${this.filePath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
       fs.writeFileSync(tempPath, JSON.stringify(list, null, 2), 'utf-8');
-      fs.renameSync(tempPath, this.filePath);
+      try {
+        fs.renameSync(tempPath, this.filePath);
+      } catch {
+        fs.copyFileSync(tempPath, this.filePath);
+        try {
+          fs.unlinkSync(tempPath);
+        } catch {}
+      }
     } catch (err) {
       console.warn('Failed to flush watch parties to disk:', err);
     }

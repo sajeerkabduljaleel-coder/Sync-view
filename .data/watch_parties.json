@@ -2146,5 +2146,4683 @@
       }
     },
     "lastActivity": 1793941508900
+  },
+  {
+    "room": {
+      "id": "room-1793945207763-566c6110",
+      "title": "🔥 Live Film Breakdown: Aethelgard Reveal",
+      "roomCode": "VSCGU3",
+      "hostId": "host-1793945207764",
+      "hostName": "Marcus Vance",
+      "sourceVideo": {
+        "id": "src-scifi-teaser",
+        "title": "Aethelgard: The Edge of Horizon (Official Cinematic Teaser)",
+        "creator": "Illumina Studios",
+        "duration": 180,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80",
+        "category": "Movies & TV",
+        "description": "The viral high-concept sci-fi trailer that stunned viewers with revolutionary VFX and emotional soundtrack.",
+        "releaseYear": 2026
+      },
+      "primaryReaction": {
+        "id": "rx-scifi-marcus",
+        "sourceId": "src-scifi-teaser",
+        "creator": "Marcus Vance",
+        "channelName": "Vance Cinema Reviews",
+        "avatar": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&q=80",
+        "title": "Film Critic SPEECHLESS at Aethelgard Reveal! (Detailed Shot Analysis)",
+        "duration": 204,
+        "introDuration": 14,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80",
+        "anchors": [
+          {
+            "id": "anc-1",
+            "sourceTime": 0,
+            "reactionTime": 14,
+            "type": "intro",
+            "label": "Reaction starts watching",
+            "notes": "Creator says \"Alright guys, let's jump in!\""
+          },
+          {
+            "id": "anc-2",
+            "sourceTime": 45,
+            "reactionTime": 59,
+            "type": "pause",
+            "label": "Pause for VFX commentary",
+            "notes": "Marcus pauses to analyze lighting in the portal scene"
+          },
+          {
+            "id": "anc-3",
+            "sourceTime": 45,
+            "reactionTime": 69,
+            "type": "pause",
+            "label": "Resumes playback",
+            "notes": "Resuming source after explanation"
+          },
+          {
+            "id": "anc-4",
+            "sourceTime": 180,
+            "reactionTime": 204,
+            "type": "outro",
+            "label": "Final reaction verdict",
+            "notes": "Outro wrap-up"
+          }
+        ],
+        "chapters": [
+          {
+            "id": "ch-1",
+            "title": "Intro & Expectations",
+            "sourceTimestamp": 0,
+            "reactionTimestamp": 0,
+            "description": "Marcus explains why he has been waiting for this teaser."
+          },
+          {
+            "id": "ch-2",
+            "title": "The Sky Portal Drop",
+            "sourceTimestamp": 28,
+            "reactionTimestamp": 42,
+            "description": "Reaction to the breathtaking CGI portal drop."
+          },
+          {
+            "id": "ch-3",
+            "title": "In-Depth Breakdown of Lighting",
+            "sourceTimestamp": 45,
+            "reactionTimestamp": 59,
+            "description": "Breakdown of anamorphic lens flares."
+          },
+          {
+            "id": "ch-4",
+            "title": "The Plot Twist Climax",
+            "sourceTimestamp": 135,
+            "reactionTimestamp": 159,
+            "description": "Jaw-dropping villain reveal."
+          },
+          {
+            "id": "ch-5",
+            "title": "Final Rating & Theories",
+            "sourceTimestamp": 180,
+            "reactionTimestamp": 185,
+            "description": "Wrap-up and premiere date discussion."
+          }
+        ],
+        "highlights": [
+          {
+            "id": "hl-1",
+            "title": "Marcus Drops His Coffee",
+            "type": "shock",
+            "sourceTimestamp": 28,
+            "reactionTimestamp": 42
+          },
+          {
+            "id": "hl-2",
+            "title": "\"Did You See That Reflection?!\"",
+            "type": "breakdown",
+            "sourceTimestamp": 45,
+            "reactionTimestamp": 60
+          },
+          {
+            "id": "hl-3",
+            "title": "Pure Goosebumps at Theme Music",
+            "type": "hype",
+            "sourceTimestamp": 150,
+            "reactionTimestamp": 174
+          }
+        ],
+        "notes": [
+          {
+            "id": "note-1",
+            "userId": "u-101",
+            "userName": "Elena Rostova",
+            "userAvatar": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80",
+            "sourceTimestamp": 28,
+            "reactionTimestamp": 42,
+            "text": "The particle physics here took 6 months to render according to the director AMA!",
+            "isPublic": true,
+            "createdAt": 1793858807758
+          },
+          {
+            "id": "note-2",
+            "userId": "u-102",
+            "userName": "Dave K.",
+            "userAvatar": "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=120&q=80",
+            "sourceTimestamp": 45,
+            "reactionTimestamp": 60,
+            "text": "Marcus is totally right about the anamorphic bokeh, that is real glass not purely digital.",
+            "isPublic": true,
+            "createdAt": 1793902007758
+          }
+        ],
+        "views": 89400,
+        "likes": 6720,
+        "isPublished": true,
+        "createdAt": 1793772407758
+      },
+      "additionalReactions": [
+        {
+          "id": "rx-scifi-kai",
+          "sourceId": "src-scifi-teaser",
+          "creator": "Kai & Maya",
+          "channelName": "DuoReact Studios",
+          "avatar": "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=160&q=80",
+          "title": "WE NEVER EXPECTED THIS! Aethelgard Live Reaction & Theory Crafting",
+          "duration": 198,
+          "introDuration": 18,
+          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+          "thumbnail": "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80",
+          "anchors": [
+            {
+              "id": "anc-k1",
+              "sourceTime": 0,
+              "reactionTime": 18,
+              "type": "intro",
+              "label": "Source start"
+            },
+            {
+              "id": "anc-k2",
+              "sourceTime": 180,
+              "reactionTime": 198,
+              "type": "linear",
+              "label": "Synced through end"
+            }
+          ],
+          "chapters": [
+            {
+              "id": "ch-k1",
+              "title": "Greeting & Hype",
+              "sourceTimestamp": 0,
+              "reactionTimestamp": 0
+            },
+            {
+              "id": "ch-k2",
+              "title": "Watching Teaser",
+              "sourceTimestamp": 0,
+              "reactionTimestamp": 18
+            },
+            {
+              "id": "ch-k3",
+              "title": "Post-Teaser Screaming",
+              "sourceTimestamp": 180,
+              "reactionTimestamp": 185
+            }
+          ],
+          "highlights": [
+            {
+              "id": "hl-k1",
+              "title": "Maya screams at jump scare",
+              "type": "shock",
+              "sourceTimestamp": 85,
+              "reactionTimestamp": 103
+            }
+          ],
+          "notes": [],
+          "views": 64200,
+          "likes": 4900,
+          "isPublished": true,
+          "createdAt": 1793815607758
+        },
+        {
+          "id": "rx-scifi-sarah",
+          "sourceId": "src-scifi-teaser",
+          "creator": "Dr. Sarah Lin (Astrophysicist)",
+          "channelName": "ScienceAtTheCinema",
+          "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=160&q=80",
+          "title": "Astrophysicist Evaluates Sci-Fi Realism in Aethelgard Trailer",
+          "duration": 215,
+          "introDuration": 20,
+          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+          "thumbnail": "https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=800&q=80",
+          "anchors": [
+            {
+              "id": "anc-s1",
+              "sourceTime": 0,
+              "reactionTime": 20,
+              "type": "intro",
+              "label": "Intro discussion"
+            },
+            {
+              "id": "anc-s2",
+              "sourceTime": 70,
+              "reactionTime": 90,
+              "type": "pause",
+              "label": "Relativistic space explanation"
+            },
+            {
+              "id": "anc-s3",
+              "sourceTime": 70,
+              "reactionTime": 105,
+              "type": "pause",
+              "label": "Resume"
+            },
+            {
+              "id": "anc-s4",
+              "sourceTime": 180,
+              "reactionTime": 215,
+              "type": "linear",
+              "label": "End"
+            }
+          ],
+          "chapters": [],
+          "highlights": [
+            {
+              "id": "hl-s1",
+              "title": "\"Actually accurate accretion disk!\"",
+              "type": "breakdown",
+              "sourceTimestamp": 70,
+              "reactionTimestamp": 95
+            }
+          ],
+          "notes": [],
+          "views": 41000,
+          "likes": 3800,
+          "isPublished": true,
+          "createdAt": 1793858807758
+        }
+      ],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793945207764
+      },
+      "participants": [
+        {
+          "id": "host-1793945207764",
+          "name": "Marcus Vance",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793945207764,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793945207764",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: VSCGU3",
+          "timestamp": 1793945207764,
+          "isHost": false
+        }
+      ],
+      "notes": [
+        {
+          "id": "note-1",
+          "userId": "u-101",
+          "userName": "Elena Rostova",
+          "userAvatar": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80",
+          "sourceTimestamp": 28,
+          "reactionTimestamp": 42,
+          "text": "The particle physics here took 6 months to render according to the director AMA!",
+          "isPublic": true,
+          "createdAt": 1793858807758
+        },
+        {
+          "id": "note-2",
+          "userId": "u-102",
+          "userName": "Dave K.",
+          "userAvatar": "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=120&q=80",
+          "sourceTimestamp": 45,
+          "reactionTimestamp": 60,
+          "text": "Marcus is totally right about the anamorphic bokeh, that is real glass not purely digital.",
+          "isPublic": true,
+          "createdAt": 1793902007758
+        }
+      ],
+      "isLocked": false,
+      "createdAt": 1793945207764
+    },
+    "hostToken": "4160bc4c23a1f2f921cf03bfa58d018065715d37f0e09517cad9ddde07dd90aa",
+    "sessions": {
+      "bb669d9e7ca5a31c6b50cc9fa40f152b431b4c1b442bbc225bfef770e7976751": {
+        "token": "bb669d9e7ca5a31c6b50cc9fa40f152b431b4c1b442bbc225bfef770e7976751",
+        "participantId": "host-1793945207764",
+        "name": "Marcus Vance",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793945207763-566c6110",
+        "joinedAt": 1793945207764,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793945207764
+  },
+  {
+    "room": {
+      "id": "room-1793945389478-eb63d9f3",
+      "title": "Neon Premiere Party",
+      "roomCode": "TBLWB2",
+      "hostId": "host-1793945389478",
+      "hostName": "Captain Alex",
+      "sourceVideo": {
+        "id": "source-1",
+        "title": "Cyberpunk Odyssey",
+        "creator": "Neon Studio",
+        "duration": 300,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80",
+        "category": "Gaming",
+        "description": "Futuristic teaser"
+      },
+      "primaryReaction": {
+        "id": "rx-1",
+        "sourceId": "source-1",
+        "creator": "Alex Rivers",
+        "channelName": "Alex Reacts",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alex Reacts to Cyberpunk Odyssey",
+        "duration": 340,
+        "introDuration": 15,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 15,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 12000,
+        "likes": 980,
+        "isPublished": true,
+        "createdAt": 1793945389457
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793945389478
+      },
+      "participants": [
+        {
+          "id": "host-1793945389478",
+          "name": "Captain Alex",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793945389478,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793945389478",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: TBLWB2",
+          "timestamp": 1793945389478,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793945389478
+    },
+    "hostToken": "dceaf88133cb5afaf0b1c715637ab418d05cf0d8321b77c1232e91ce1957ae27",
+    "sessions": {
+      "0af456940c501403be2426c3e4d48495b29d850e8ba7cba4556cefc7d32d0ec0": {
+        "token": "0af456940c501403be2426c3e4d48495b29d850e8ba7cba4556cefc7d32d0ec0",
+        "participantId": "host-1793945389478",
+        "name": "Captain Alex",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793945389478-eb63d9f3",
+        "joinedAt": 1793945389478,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793945389478
+  },
+  {
+    "room": {
+      "id": "room-1793945389485-8f0a707d",
+      "title": "Premiere",
+      "roomCode": "CAADL5",
+      "hostId": "host-1793945389485",
+      "hostName": "Host1",
+      "sourceVideo": {
+        "id": "source-1",
+        "title": "Cyberpunk Odyssey",
+        "creator": "Neon Studio",
+        "duration": 300,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80",
+        "category": "Gaming",
+        "description": "Futuristic teaser"
+      },
+      "primaryReaction": {
+        "id": "rx-1",
+        "sourceId": "source-1",
+        "creator": "Alex Rivers",
+        "channelName": "Alex Reacts",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alex Reacts to Cyberpunk Odyssey",
+        "duration": 340,
+        "introDuration": 15,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 15,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 12000,
+        "likes": 980,
+        "isPublished": true,
+        "createdAt": 1793945389457
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": true,
+        "sourceTime": 12.5,
+        "playbackRate": 1,
+        "seq": 2,
+        "serverTimestamp": 1793945389487
+      },
+      "participants": [
+        {
+          "id": "host-1793945389485",
+          "name": "Host1",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793945389485,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793945389485",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: CAADL5",
+          "timestamp": 1793945389485,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793945389485
+    },
+    "hostToken": "b3247a9579f02b298bd5899dcabacb0faade5468ab10d4db13cc0297d07c8e3d",
+    "sessions": {
+      "1877c4aaede0f22efff6079d29b984ab2d4b518042353fb17875bace73682370": {
+        "token": "1877c4aaede0f22efff6079d29b984ab2d4b518042353fb17875bace73682370",
+        "participantId": "host-1793945389485",
+        "name": "Host1",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793945389485-8f0a707d",
+        "joinedAt": 1793945389485,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793945389487
+  },
+  {
+    "room": {
+      "id": "room-1793945389491-ef749d8b",
+      "title": "Chat Test Party",
+      "roomCode": "ZBR9P4",
+      "hostId": "host-1793945389491",
+      "hostName": "Host1",
+      "sourceVideo": {
+        "id": "source-1",
+        "title": "Cyberpunk Odyssey",
+        "creator": "Neon Studio",
+        "duration": 300,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80",
+        "category": "Gaming",
+        "description": "Futuristic teaser"
+      },
+      "primaryReaction": {
+        "id": "rx-1",
+        "sourceId": "source-1",
+        "creator": "Alex Rivers",
+        "channelName": "Alex Reacts",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alex Reacts to Cyberpunk Odyssey",
+        "duration": 340,
+        "introDuration": 15,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 15,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 12000,
+        "likes": 980,
+        "isPublished": true,
+        "createdAt": 1793945389457
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793945389491
+      },
+      "participants": [
+        {
+          "id": "host-1793945389491",
+          "name": "Host1",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793945389491,
+          "status": "watching"
+        },
+        {
+          "id": "viewer-1793945389493-09bc2e",
+          "name": "Viewer Sam",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945389493-09bc2e",
+          "isHost": false,
+          "joinedAt": 1793945389493,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793945389491",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: ZBR9P4",
+          "timestamp": 1793945389491,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793945389493",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "Viewer Sam joined the party.",
+          "timestamp": 1793945389493,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793945389496-7531",
+          "senderId": "viewer-1793945389493-09bc2e",
+          "senderName": "Viewer Sam",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945389493-09bc2e",
+          "text": "This sync is unreal!",
+          "timestamp": 1793945389496,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793945389491
+    },
+    "hostToken": "14039799f47561cd32c145985102c1dc36ea7a59c3206f437be40e3d45ac5835",
+    "sessions": {
+      "e80d3b45ffb800e7dc6bf11ca59093481de71401f07a29db853cb08cf7b7441e": {
+        "token": "e80d3b45ffb800e7dc6bf11ca59093481de71401f07a29db853cb08cf7b7441e",
+        "participantId": "host-1793945389491",
+        "name": "Host1",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793945389491-ef749d8b",
+        "joinedAt": 1793945389491,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      },
+      "2b94cebbe270aea88e4fe3060ca8c089eed1779defc994c641180830cfabcbef": {
+        "token": "2b94cebbe270aea88e4fe3060ca8c089eed1779defc994c641180830cfabcbef",
+        "participantId": "viewer-1793945389493-09bc2e",
+        "name": "Viewer Sam",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945389493-09bc2e",
+        "isHost": false,
+        "roomId": "room-1793945389491-ef749d8b",
+        "joinedAt": 1793945389493,
+        "lastMessageTime": 1793945389496,
+        "messageWindowCount": 1
+      }
+    },
+    "lastActivity": 1793945389496
+  },
+  {
+    "room": {
+      "id": "room-1793945389502-d202f51a",
+      "title": "Rate Limit Party",
+      "roomCode": "M5YC9P",
+      "hostId": "host-1793945389502",
+      "hostName": "Host1",
+      "sourceVideo": {
+        "id": "source-1",
+        "title": "Cyberpunk Odyssey",
+        "creator": "Neon Studio",
+        "duration": 300,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80",
+        "category": "Gaming",
+        "description": "Futuristic teaser"
+      },
+      "primaryReaction": {
+        "id": "rx-1",
+        "sourceId": "source-1",
+        "creator": "Alex Rivers",
+        "channelName": "Alex Reacts",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alex Reacts to Cyberpunk Odyssey",
+        "duration": 340,
+        "introDuration": 15,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 15,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 12000,
+        "likes": 980,
+        "isPublished": true,
+        "createdAt": 1793945389457
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793945389502
+      },
+      "participants": [
+        {
+          "id": "host-1793945389502",
+          "name": "Host1",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793945389502,
+          "status": "watching"
+        },
+        {
+          "id": "viewer-1793945389504-e1fe56",
+          "name": "Spammy",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945389504-e1fe56",
+          "isHost": false,
+          "joinedAt": 1793945389504,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793945389502",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: M5YC9P",
+          "timestamp": 1793945389502,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793945389504",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "Spammy joined the party.",
+          "timestamp": 1793945389504,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793945389505-9a8f",
+          "senderId": "viewer-1793945389504-e1fe56",
+          "senderName": "Spammy",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945389504-e1fe56",
+          "text": "Hello 1",
+          "timestamp": 1793945389505,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793945389502
+    },
+    "hostToken": "77e307bb1b4537c066bff6e1f57b2f30828b91e4f38dc4dc2b9cc5539b1a520a",
+    "sessions": {
+      "8599e37182714194fc4ce4d745e7371d7dc193807a50bb321aa4211bce862345": {
+        "token": "8599e37182714194fc4ce4d745e7371d7dc193807a50bb321aa4211bce862345",
+        "participantId": "host-1793945389502",
+        "name": "Host1",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793945389502-d202f51a",
+        "joinedAt": 1793945389502,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      },
+      "0e2a1147bfd60a29ad76a1b7b4bbe54514bc4855d464a93c21d5c1a225078794": {
+        "token": "0e2a1147bfd60a29ad76a1b7b4bbe54514bc4855d464a93c21d5c1a225078794",
+        "participantId": "viewer-1793945389504-e1fe56",
+        "name": "Spammy",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945389504-e1fe56",
+        "isHost": false,
+        "roomId": "room-1793945389502-d202f51a",
+        "joinedAt": 1793945389504,
+        "lastMessageTime": 1793945389505,
+        "messageWindowCount": 1
+      }
+    },
+    "lastActivity": 1793945389505
+  },
+  {
+    "room": {
+      "id": "room-1793945389509-ab6bf806",
+      "title": "Notes Test",
+      "roomCode": "NZMA4Q",
+      "hostId": "host-1793945389509",
+      "hostName": "Host1",
+      "sourceVideo": {
+        "id": "source-1",
+        "title": "Cyberpunk Odyssey",
+        "creator": "Neon Studio",
+        "duration": 300,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80",
+        "category": "Gaming",
+        "description": "Futuristic teaser"
+      },
+      "primaryReaction": {
+        "id": "rx-1",
+        "sourceId": "source-1",
+        "creator": "Alex Rivers",
+        "channelName": "Alex Reacts",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alex Reacts to Cyberpunk Odyssey",
+        "duration": 340,
+        "introDuration": 15,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 15,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 12000,
+        "likes": 980,
+        "isPublished": true,
+        "createdAt": 1793945389457
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793945389509
+      },
+      "participants": [
+        {
+          "id": "host-1793945389509",
+          "name": "Host1",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793945389509,
+          "status": "watching"
+        },
+        {
+          "id": "viewer-1793945389510-d9b9fb",
+          "name": "NoteTaker",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945389510-d9b9fb",
+          "isHost": false,
+          "joinedAt": 1793945389510,
+          "status": "watching"
+        },
+        {
+          "id": "viewer-1793945389513-a2551e",
+          "name": "OtherViewer",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945389513-a2551e",
+          "isHost": false,
+          "joinedAt": 1793945389513,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793945389509",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: NZMA4Q",
+          "timestamp": 1793945389509,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793945389510",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "NoteTaker joined the party.",
+          "timestamp": 1793945389510,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793945389513",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "OtherViewer joined the party.",
+          "timestamp": 1793945389513,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793945389509
+    },
+    "hostToken": "519dfbdf84b69d0832d041cbe966d600cc977005d7208866562e57e42519f504",
+    "sessions": {
+      "02c2b57833dff9a9003a7289c0ab69f46ede4abdc619ae9e27f5b1e91e54917b": {
+        "token": "02c2b57833dff9a9003a7289c0ab69f46ede4abdc619ae9e27f5b1e91e54917b",
+        "participantId": "host-1793945389509",
+        "name": "Host1",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793945389509-ab6bf806",
+        "joinedAt": 1793945389509,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      },
+      "8fc1280fa199f9cbae3ccc500afd558eb39be53480f57f8ce322876fb76d5040": {
+        "token": "8fc1280fa199f9cbae3ccc500afd558eb39be53480f57f8ce322876fb76d5040",
+        "participantId": "viewer-1793945389510-d9b9fb",
+        "name": "NoteTaker",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945389510-d9b9fb",
+        "isHost": false,
+        "roomId": "room-1793945389509-ab6bf806",
+        "joinedAt": 1793945389510,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      },
+      "ac911ba73c042068d755290f7b4dbd08e6b3bef6d3f8338df82dd58829470876": {
+        "token": "ac911ba73c042068d755290f7b4dbd08e6b3bef6d3f8338df82dd58829470876",
+        "participantId": "viewer-1793945389513-a2551e",
+        "name": "OtherViewer",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945389513-a2551e",
+        "isHost": false,
+        "roomId": "room-1793945389509-ab6bf806",
+        "joinedAt": 1793945389513,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793945389515
+  },
+  {
+    "room": {
+      "id": "room-1793945389519-98643fd1",
+      "title": "Reassignment Test",
+      "roomCode": "3ZHLHJ",
+      "hostId": "viewer-1793945389520-e2b749",
+      "hostName": "NewHostCandidate",
+      "sourceVideo": {
+        "id": "source-1",
+        "title": "Cyberpunk Odyssey",
+        "creator": "Neon Studio",
+        "duration": 300,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80",
+        "category": "Gaming",
+        "description": "Futuristic teaser"
+      },
+      "primaryReaction": {
+        "id": "rx-1",
+        "sourceId": "source-1",
+        "creator": "Alex Rivers",
+        "channelName": "Alex Reacts",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alex Reacts to Cyberpunk Odyssey",
+        "duration": 340,
+        "introDuration": 15,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 15,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 12000,
+        "likes": 980,
+        "isPublished": true,
+        "createdAt": 1793945389457
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 5,
+        "playbackRate": 1,
+        "seq": 2,
+        "serverTimestamp": 1793945389522
+      },
+      "participants": [
+        {
+          "id": "host-1793945389519",
+          "name": "OriginalHost",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": false,
+          "joinedAt": 1793945389519,
+          "status": "watching"
+        },
+        {
+          "id": "viewer-1793945389520-e2b749",
+          "name": "NewHostCandidate",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945389520-e2b749",
+          "isHost": true,
+          "joinedAt": 1793945389520,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793945389519",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: 3ZHLHJ",
+          "timestamp": 1793945389519,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793945389520",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "NewHostCandidate joined the party.",
+          "timestamp": 1793945389520,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793945389519
+    },
+    "hostToken": "0f59807c382203d48926bff2ed331c5e3ee622e275433e4783adffc4f9dee45f",
+    "sessions": {
+      "462be144e3adf0958d93cee5890e2eff68cc76623af2cd5881c224ed9cfeeea8": {
+        "token": "462be144e3adf0958d93cee5890e2eff68cc76623af2cd5881c224ed9cfeeea8",
+        "participantId": "host-1793945389519",
+        "name": "OriginalHost",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": false,
+        "roomId": "room-1793945389519-98643fd1",
+        "joinedAt": 1793945389519,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      },
+      "79388dd241721bf0d52799d6fdbdb967f82f2affcf98b452e440de2096fe0f60": {
+        "token": "79388dd241721bf0d52799d6fdbdb967f82f2affcf98b452e440de2096fe0f60",
+        "participantId": "viewer-1793945389520-e2b749",
+        "name": "NewHostCandidate",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945389520-e2b749",
+        "isHost": true,
+        "roomId": "room-1793945389519-98643fd1",
+        "joinedAt": 1793945389520,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793945389522
+  },
+  {
+    "room": {
+      "id": "room-1793945501212-36327843",
+      "title": "🔥 Live Film Breakdown: Aethelgard Reveal",
+      "roomCode": "YPHC53",
+      "hostId": "host-1793945501212",
+      "hostName": "Marcus Vance",
+      "sourceVideo": {
+        "id": "src-scifi-teaser",
+        "title": "Aethelgard: The Edge of Horizon (Official Cinematic Teaser)",
+        "creator": "Illumina Studios",
+        "duration": 180,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80",
+        "category": "Movies & TV",
+        "description": "The viral high-concept sci-fi trailer that stunned viewers with revolutionary VFX and emotional soundtrack.",
+        "releaseYear": 2026
+      },
+      "primaryReaction": {
+        "id": "rx-scifi-marcus",
+        "sourceId": "src-scifi-teaser",
+        "creator": "Marcus Vance",
+        "channelName": "Vance Cinema Reviews",
+        "avatar": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&q=80",
+        "title": "Film Critic SPEECHLESS at Aethelgard Reveal! (Detailed Shot Analysis)",
+        "duration": 204,
+        "introDuration": 14,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80",
+        "anchors": [
+          {
+            "id": "anc-1",
+            "sourceTime": 0,
+            "reactionTime": 14,
+            "type": "intro",
+            "label": "Reaction starts watching",
+            "notes": "Creator says \"Alright guys, let's jump in!\""
+          },
+          {
+            "id": "anc-2",
+            "sourceTime": 45,
+            "reactionTime": 59,
+            "type": "pause",
+            "label": "Pause for VFX commentary",
+            "notes": "Marcus pauses to analyze lighting in the portal scene"
+          },
+          {
+            "id": "anc-3",
+            "sourceTime": 45,
+            "reactionTime": 69,
+            "type": "pause",
+            "label": "Resumes playback",
+            "notes": "Resuming source after explanation"
+          },
+          {
+            "id": "anc-4",
+            "sourceTime": 180,
+            "reactionTime": 204,
+            "type": "outro",
+            "label": "Final reaction verdict",
+            "notes": "Outro wrap-up"
+          }
+        ],
+        "chapters": [
+          {
+            "id": "ch-1",
+            "title": "Intro & Expectations",
+            "sourceTimestamp": 0,
+            "reactionTimestamp": 0,
+            "description": "Marcus explains why he has been waiting for this teaser."
+          },
+          {
+            "id": "ch-2",
+            "title": "The Sky Portal Drop",
+            "sourceTimestamp": 28,
+            "reactionTimestamp": 42,
+            "description": "Reaction to the breathtaking CGI portal drop."
+          },
+          {
+            "id": "ch-3",
+            "title": "In-Depth Breakdown of Lighting",
+            "sourceTimestamp": 45,
+            "reactionTimestamp": 59,
+            "description": "Breakdown of anamorphic lens flares."
+          },
+          {
+            "id": "ch-4",
+            "title": "The Plot Twist Climax",
+            "sourceTimestamp": 135,
+            "reactionTimestamp": 159,
+            "description": "Jaw-dropping villain reveal."
+          },
+          {
+            "id": "ch-5",
+            "title": "Final Rating & Theories",
+            "sourceTimestamp": 180,
+            "reactionTimestamp": 185,
+            "description": "Wrap-up and premiere date discussion."
+          }
+        ],
+        "highlights": [
+          {
+            "id": "hl-1",
+            "title": "Marcus Drops His Coffee",
+            "type": "shock",
+            "sourceTimestamp": 28,
+            "reactionTimestamp": 42
+          },
+          {
+            "id": "hl-2",
+            "title": "\"Did You See That Reflection?!\"",
+            "type": "breakdown",
+            "sourceTimestamp": 45,
+            "reactionTimestamp": 60
+          },
+          {
+            "id": "hl-3",
+            "title": "Pure Goosebumps at Theme Music",
+            "type": "hype",
+            "sourceTimestamp": 150,
+            "reactionTimestamp": 174
+          }
+        ],
+        "notes": [
+          {
+            "id": "note-1",
+            "userId": "u-101",
+            "userName": "Elena Rostova",
+            "userAvatar": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80",
+            "sourceTimestamp": 28,
+            "reactionTimestamp": 42,
+            "text": "The particle physics here took 6 months to render according to the director AMA!",
+            "isPublic": true,
+            "createdAt": 1793859101205
+          },
+          {
+            "id": "note-2",
+            "userId": "u-102",
+            "userName": "Dave K.",
+            "userAvatar": "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=120&q=80",
+            "sourceTimestamp": 45,
+            "reactionTimestamp": 60,
+            "text": "Marcus is totally right about the anamorphic bokeh, that is real glass not purely digital.",
+            "isPublic": true,
+            "createdAt": 1793902301205
+          }
+        ],
+        "views": 89400,
+        "likes": 6720,
+        "isPublished": true,
+        "createdAt": 1793772701205
+      },
+      "additionalReactions": [
+        {
+          "id": "rx-scifi-kai",
+          "sourceId": "src-scifi-teaser",
+          "creator": "Kai & Maya",
+          "channelName": "DuoReact Studios",
+          "avatar": "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=160&q=80",
+          "title": "WE NEVER EXPECTED THIS! Aethelgard Live Reaction & Theory Crafting",
+          "duration": 198,
+          "introDuration": 18,
+          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+          "thumbnail": "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80",
+          "anchors": [
+            {
+              "id": "anc-k1",
+              "sourceTime": 0,
+              "reactionTime": 18,
+              "type": "intro",
+              "label": "Source start"
+            },
+            {
+              "id": "anc-k2",
+              "sourceTime": 180,
+              "reactionTime": 198,
+              "type": "linear",
+              "label": "Synced through end"
+            }
+          ],
+          "chapters": [
+            {
+              "id": "ch-k1",
+              "title": "Greeting & Hype",
+              "sourceTimestamp": 0,
+              "reactionTimestamp": 0
+            },
+            {
+              "id": "ch-k2",
+              "title": "Watching Teaser",
+              "sourceTimestamp": 0,
+              "reactionTimestamp": 18
+            },
+            {
+              "id": "ch-k3",
+              "title": "Post-Teaser Screaming",
+              "sourceTimestamp": 180,
+              "reactionTimestamp": 185
+            }
+          ],
+          "highlights": [
+            {
+              "id": "hl-k1",
+              "title": "Maya screams at jump scare",
+              "type": "shock",
+              "sourceTimestamp": 85,
+              "reactionTimestamp": 103
+            }
+          ],
+          "notes": [],
+          "views": 64200,
+          "likes": 4900,
+          "isPublished": true,
+          "createdAt": 1793815901205
+        },
+        {
+          "id": "rx-scifi-sarah",
+          "sourceId": "src-scifi-teaser",
+          "creator": "Dr. Sarah Lin (Astrophysicist)",
+          "channelName": "ScienceAtTheCinema",
+          "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=160&q=80",
+          "title": "Astrophysicist Evaluates Sci-Fi Realism in Aethelgard Trailer",
+          "duration": 215,
+          "introDuration": 20,
+          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+          "thumbnail": "https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=800&q=80",
+          "anchors": [
+            {
+              "id": "anc-s1",
+              "sourceTime": 0,
+              "reactionTime": 20,
+              "type": "intro",
+              "label": "Intro discussion"
+            },
+            {
+              "id": "anc-s2",
+              "sourceTime": 70,
+              "reactionTime": 90,
+              "type": "pause",
+              "label": "Relativistic space explanation"
+            },
+            {
+              "id": "anc-s3",
+              "sourceTime": 70,
+              "reactionTime": 105,
+              "type": "pause",
+              "label": "Resume"
+            },
+            {
+              "id": "anc-s4",
+              "sourceTime": 180,
+              "reactionTime": 215,
+              "type": "linear",
+              "label": "End"
+            }
+          ],
+          "chapters": [],
+          "highlights": [
+            {
+              "id": "hl-s1",
+              "title": "\"Actually accurate accretion disk!\"",
+              "type": "breakdown",
+              "sourceTimestamp": 70,
+              "reactionTimestamp": 95
+            }
+          ],
+          "notes": [],
+          "views": 41000,
+          "likes": 3800,
+          "isPublished": true,
+          "createdAt": 1793859101206
+        }
+      ],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793945501212
+      },
+      "participants": [
+        {
+          "id": "host-1793945501212",
+          "name": "Marcus Vance",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793945501212,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793945501212",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: YPHC53",
+          "timestamp": 1793945501212,
+          "isHost": false
+        }
+      ],
+      "notes": [
+        {
+          "id": "note-1",
+          "userId": "u-101",
+          "userName": "Elena Rostova",
+          "userAvatar": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80",
+          "sourceTimestamp": 28,
+          "reactionTimestamp": 42,
+          "text": "The particle physics here took 6 months to render according to the director AMA!",
+          "isPublic": true,
+          "createdAt": 1793859101205
+        },
+        {
+          "id": "note-2",
+          "userId": "u-102",
+          "userName": "Dave K.",
+          "userAvatar": "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=120&q=80",
+          "sourceTimestamp": 45,
+          "reactionTimestamp": 60,
+          "text": "Marcus is totally right about the anamorphic bokeh, that is real glass not purely digital.",
+          "isPublic": true,
+          "createdAt": 1793902301205
+        }
+      ],
+      "isLocked": false,
+      "createdAt": 1793945501212
+    },
+    "hostToken": "02e058036786cf949835a758b95be9f6167bdad88a4c0b2e1eaeb82c44d79cb0",
+    "sessions": {
+      "a418f17cbb018d37c2319197d8d9fd669ae5c23544067e70d47aa03fffcb9f00": {
+        "token": "a418f17cbb018d37c2319197d8d9fd669ae5c23544067e70d47aa03fffcb9f00",
+        "participantId": "host-1793945501212",
+        "name": "Marcus Vance",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793945501212-36327843",
+        "joinedAt": 1793945501212,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793945501212
+  },
+  {
+    "room": {
+      "id": "room-1793945728410-76b2ae44",
+      "title": "Neon Premiere Party",
+      "roomCode": "XSDVUB",
+      "hostId": "host-1793945728410",
+      "hostName": "Captain Alex",
+      "sourceVideo": {
+        "id": "source-1",
+        "title": "Cyberpunk Odyssey",
+        "creator": "Neon Studio",
+        "duration": 300,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80",
+        "category": "Gaming",
+        "description": "Futuristic teaser"
+      },
+      "primaryReaction": {
+        "id": "rx-1",
+        "sourceId": "source-1",
+        "creator": "Alex Rivers",
+        "channelName": "Alex Reacts",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alex Reacts to Cyberpunk Odyssey",
+        "duration": 340,
+        "introDuration": 15,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 15,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 12000,
+        "likes": 980,
+        "isPublished": true,
+        "createdAt": 1793945728397
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793945728410
+      },
+      "participants": [
+        {
+          "id": "host-1793945728410",
+          "name": "Captain Alex",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793945728410,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793945728410",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: XSDVUB",
+          "timestamp": 1793945728410,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793945728410
+    },
+    "hostToken": "a92254d5ca89f3cfab1bf17a3e0d92f4f2be13044b9168d2f74547cfc3220e73",
+    "sessions": {
+      "0f287e083739dbbff5eeea629bf4b3eefaaaa4269d32f0457e0d64a6eb17e4ee": {
+        "token": "0f287e083739dbbff5eeea629bf4b3eefaaaa4269d32f0457e0d64a6eb17e4ee",
+        "participantId": "host-1793945728410",
+        "name": "Captain Alex",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793945728410-76b2ae44",
+        "joinedAt": 1793945728410,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793945728410
+  },
+  {
+    "room": {
+      "id": "room-1793945728418-d0099003",
+      "title": "Premiere",
+      "roomCode": "VG8LPQ",
+      "hostId": "host-1793945728418",
+      "hostName": "Host1",
+      "sourceVideo": {
+        "id": "source-1",
+        "title": "Cyberpunk Odyssey",
+        "creator": "Neon Studio",
+        "duration": 300,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80",
+        "category": "Gaming",
+        "description": "Futuristic teaser"
+      },
+      "primaryReaction": {
+        "id": "rx-1",
+        "sourceId": "source-1",
+        "creator": "Alex Rivers",
+        "channelName": "Alex Reacts",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alex Reacts to Cyberpunk Odyssey",
+        "duration": 340,
+        "introDuration": 15,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 15,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 12000,
+        "likes": 980,
+        "isPublished": true,
+        "createdAt": 1793945728397
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": true,
+        "sourceTime": 12.5,
+        "playbackRate": 1,
+        "seq": 2,
+        "serverTimestamp": 1793945728421
+      },
+      "participants": [
+        {
+          "id": "host-1793945728418",
+          "name": "Host1",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793945728418,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793945728418",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: VG8LPQ",
+          "timestamp": 1793945728418,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793945728418
+    },
+    "hostToken": "a5a6c992f247da02a8a05f5f148e816c3ca7b339151fd8e309ae027ada682ae5",
+    "sessions": {
+      "c72104f54fb4ef96909526e568d6aac2ad9779b1cf76bd10335ccb0ba4e1b90b": {
+        "token": "c72104f54fb4ef96909526e568d6aac2ad9779b1cf76bd10335ccb0ba4e1b90b",
+        "participantId": "host-1793945728418",
+        "name": "Host1",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793945728418-d0099003",
+        "joinedAt": 1793945728418,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793945728421
+  },
+  {
+    "room": {
+      "id": "room-1793945728424-7d27334d",
+      "title": "Chat Test Party",
+      "roomCode": "78QYPN",
+      "hostId": "host-1793945728425",
+      "hostName": "Host1",
+      "sourceVideo": {
+        "id": "source-1",
+        "title": "Cyberpunk Odyssey",
+        "creator": "Neon Studio",
+        "duration": 300,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80",
+        "category": "Gaming",
+        "description": "Futuristic teaser"
+      },
+      "primaryReaction": {
+        "id": "rx-1",
+        "sourceId": "source-1",
+        "creator": "Alex Rivers",
+        "channelName": "Alex Reacts",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alex Reacts to Cyberpunk Odyssey",
+        "duration": 340,
+        "introDuration": 15,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 15,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 12000,
+        "likes": 980,
+        "isPublished": true,
+        "createdAt": 1793945728397
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793945728425
+      },
+      "participants": [
+        {
+          "id": "host-1793945728425",
+          "name": "Host1",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793945728425,
+          "status": "watching"
+        },
+        {
+          "id": "viewer-1793945728427-dcfa1a",
+          "name": "Viewer Sam",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945728427-dcfa1a",
+          "isHost": false,
+          "joinedAt": 1793945728427,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793945728425",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: 78QYPN",
+          "timestamp": 1793945728425,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793945728427",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "Viewer Sam joined the party.",
+          "timestamp": 1793945728427,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793945728431-b23e",
+          "senderId": "viewer-1793945728427-dcfa1a",
+          "senderName": "Viewer Sam",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945728427-dcfa1a",
+          "text": "This sync is unreal!",
+          "timestamp": 1793945728431,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793945728425
+    },
+    "hostToken": "5f007bcb1e4e63ce4737a1494fd011e3bbb9a8992650c4e106a6baeffeff844e",
+    "sessions": {
+      "1b2fe1913a6945a206a610bc1bfeac09001cca964cd63f16325dfcae77dd13c1": {
+        "token": "1b2fe1913a6945a206a610bc1bfeac09001cca964cd63f16325dfcae77dd13c1",
+        "participantId": "host-1793945728425",
+        "name": "Host1",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793945728424-7d27334d",
+        "joinedAt": 1793945728425,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      },
+      "13e1fbfb2c595421aa791223fd6cda2cb11bbb62f88052af87f11415b574d4e1": {
+        "token": "13e1fbfb2c595421aa791223fd6cda2cb11bbb62f88052af87f11415b574d4e1",
+        "participantId": "viewer-1793945728427-dcfa1a",
+        "name": "Viewer Sam",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945728427-dcfa1a",
+        "isHost": false,
+        "roomId": "room-1793945728424-7d27334d",
+        "joinedAt": 1793945728427,
+        "lastMessageTime": 1793945728431,
+        "messageWindowCount": 1
+      }
+    },
+    "lastActivity": 1793945728431
+  },
+  {
+    "room": {
+      "id": "room-1793945728437-8a209cb3",
+      "title": "Rate Limit Party",
+      "roomCode": "38SB65",
+      "hostId": "host-1793945728437",
+      "hostName": "Host1",
+      "sourceVideo": {
+        "id": "source-1",
+        "title": "Cyberpunk Odyssey",
+        "creator": "Neon Studio",
+        "duration": 300,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80",
+        "category": "Gaming",
+        "description": "Futuristic teaser"
+      },
+      "primaryReaction": {
+        "id": "rx-1",
+        "sourceId": "source-1",
+        "creator": "Alex Rivers",
+        "channelName": "Alex Reacts",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alex Reacts to Cyberpunk Odyssey",
+        "duration": 340,
+        "introDuration": 15,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 15,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 12000,
+        "likes": 980,
+        "isPublished": true,
+        "createdAt": 1793945728397
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793945728437
+      },
+      "participants": [
+        {
+          "id": "host-1793945728437",
+          "name": "Host1",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793945728437,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793945728437",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: 38SB65",
+          "timestamp": 1793945728437,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793945728437
+    },
+    "hostToken": "b13bfd98f592a989022cbf246e1b94966bd2412f851e0f79cf56032c7c7c640a",
+    "sessions": {
+      "fd58e1ffff4171dcbb53ed5f751ad7eed7a553b6ba1c843b85d2ab03d2ad891d": {
+        "token": "fd58e1ffff4171dcbb53ed5f751ad7eed7a553b6ba1c843b85d2ab03d2ad891d",
+        "participantId": "host-1793945728437",
+        "name": "Host1",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793945728437-8a209cb3",
+        "joinedAt": 1793945728437,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793945728437
+  },
+  {
+    "room": {
+      "id": "room-1793945728443-0c001b5a",
+      "title": "Room Alpha",
+      "roomCode": "FK38E8",
+      "hostId": "host-1793945728443",
+      "hostName": "Host A",
+      "sourceVideo": {
+        "id": "src-security",
+        "title": "Security Analysis Video",
+        "creator": "SyncView Security Team",
+        "duration": 200,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80",
+        "category": "Tech",
+        "description": "Test fixture for security verification"
+      },
+      "primaryReaction": {
+        "id": "rx-security",
+        "sourceId": "src-security",
+        "creator": "Alice Host",
+        "channelName": "Alice Security",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alice Tests SyncView Security",
+        "duration": 220,
+        "introDuration": 10,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 10,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 5000,
+        "likes": 400,
+        "isPublished": true,
+        "createdAt": 1793945728419
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793945728443
+      },
+      "participants": [
+        {
+          "id": "host-1793945728443",
+          "name": "Host A",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793945728443,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793945728443",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: FK38E8",
+          "timestamp": 1793945728443,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793945728443
+    },
+    "hostToken": "53e0935e4a052c73c51d30489edb59a807f3c594235af53709fa38ced1c8c13a",
+    "sessions": {
+      "9cd8ef68826db661dcc01c66dd50515889261eff18aebdd899b2886606449dbe": {
+        "token": "9cd8ef68826db661dcc01c66dd50515889261eff18aebdd899b2886606449dbe",
+        "participantId": "host-1793945728443",
+        "name": "Host A",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793945728443-0c001b5a",
+        "joinedAt": 1793945728443,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793945728443
+  },
+  {
+    "room": {
+      "id": "room-1793945728447-cfa56386",
+      "title": "Notes Test",
+      "roomCode": "679R47",
+      "hostId": "host-1793945728447",
+      "hostName": "Host1",
+      "sourceVideo": {
+        "id": "source-1",
+        "title": "Cyberpunk Odyssey",
+        "creator": "Neon Studio",
+        "duration": 300,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80",
+        "category": "Gaming",
+        "description": "Futuristic teaser"
+      },
+      "primaryReaction": {
+        "id": "rx-1",
+        "sourceId": "source-1",
+        "creator": "Alex Rivers",
+        "channelName": "Alex Reacts",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alex Reacts to Cyberpunk Odyssey",
+        "duration": 340,
+        "introDuration": 15,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 15,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 12000,
+        "likes": 980,
+        "isPublished": true,
+        "createdAt": 1793945728397
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793945728447
+      },
+      "participants": [
+        {
+          "id": "host-1793945728447",
+          "name": "Host1",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793945728447,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793945728447",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: 679R47",
+          "timestamp": 1793945728447,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793945728447
+    },
+    "hostToken": "e00f8a72bd8b4ac100d927fb845640f3444225284c9b1d33dd5bbfc69202adf2",
+    "sessions": {
+      "8c3a9b749d7dcf1698828af6d9a1b4b42b8760ea7eda1baa26750a5f5cabb176": {
+        "token": "8c3a9b749d7dcf1698828af6d9a1b4b42b8760ea7eda1baa26750a5f5cabb176",
+        "participantId": "host-1793945728447",
+        "name": "Host1",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793945728447-cfa56386",
+        "joinedAt": 1793945728447,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793945728447
+  },
+  {
+    "room": {
+      "id": "room-1793945728452-0a4abb80",
+      "title": "Secret Leak Test",
+      "roomCode": "FBVQC2",
+      "hostId": "host-1793945728452",
+      "hostName": "Host Alice",
+      "sourceVideo": {
+        "id": "src-security",
+        "title": "Security Analysis Video",
+        "creator": "SyncView Security Team",
+        "duration": 200,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80",
+        "category": "Tech",
+        "description": "Test fixture for security verification"
+      },
+      "primaryReaction": {
+        "id": "rx-security",
+        "sourceId": "src-security",
+        "creator": "Alice Host",
+        "channelName": "Alice Security",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alice Tests SyncView Security",
+        "duration": 220,
+        "introDuration": 10,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 10,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 5000,
+        "likes": 400,
+        "isPublished": true,
+        "createdAt": 1793945728419
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793945728452
+      },
+      "participants": [
+        {
+          "id": "host-1793945728452",
+          "name": "Host Alice",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793945728452,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793945728452",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: FBVQC2",
+          "timestamp": 1793945728452,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793945728452
+    },
+    "hostToken": "772753dd3dff73e7ebbd2bf3ccc8b750b156ff0988daa80994ce1946cc0b4e0b",
+    "sessions": {
+      "cdd7dc09591546b7d7464b9c5db8ea9c16a53e2f543823e27eccbf37aedac600": {
+        "token": "cdd7dc09591546b7d7464b9c5db8ea9c16a53e2f543823e27eccbf37aedac600",
+        "participantId": "host-1793945728452",
+        "name": "Host Alice",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793945728452-0a4abb80",
+        "joinedAt": 1793945728452,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793945728452
+  },
+  {
+    "room": {
+      "id": "room-1793945728457-5a7af57b",
+      "title": "Command Auth Test",
+      "roomCode": "3MLT73",
+      "hostId": "host-1793945728457",
+      "hostName": "Real Host",
+      "sourceVideo": {
+        "id": "src-security",
+        "title": "Security Analysis Video",
+        "creator": "SyncView Security Team",
+        "duration": 200,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80",
+        "category": "Tech",
+        "description": "Test fixture for security verification"
+      },
+      "primaryReaction": {
+        "id": "rx-security",
+        "sourceId": "src-security",
+        "creator": "Alice Host",
+        "channelName": "Alice Security",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alice Tests SyncView Security",
+        "duration": 220,
+        "introDuration": 10,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 10,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 5000,
+        "likes": 400,
+        "isPublished": true,
+        "createdAt": 1793945728419
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 45,
+        "playbackRate": 1,
+        "seq": 2,
+        "serverTimestamp": 1793945728462
+      },
+      "participants": [
+        {
+          "id": "host-1793945728457",
+          "name": "Real Host",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793945728457,
+          "status": "watching"
+        },
+        {
+          "id": "viewer-1793945728459-71eeee",
+          "name": "Audience Member",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945728459-71eeee",
+          "isHost": false,
+          "joinedAt": 1793945728459,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793945728457",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: 3MLT73",
+          "timestamp": 1793945728457,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793945728459",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "Audience Member joined the party.",
+          "timestamp": 1793945728459,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793945728457
+    },
+    "hostToken": "ab220738e4e3dae6c11e69a0eaa5708a7cef448942c9d2e5e76cc3d18a19f21c",
+    "sessions": {
+      "8e4201cce2811880b726c0bb00f043ae0fa2954ee4b939a86add1f8508af209f": {
+        "token": "8e4201cce2811880b726c0bb00f043ae0fa2954ee4b939a86add1f8508af209f",
+        "participantId": "host-1793945728457",
+        "name": "Real Host",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793945728457-5a7af57b",
+        "joinedAt": 1793945728457,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      },
+      "493c3452dbc6e35dd64974bc7ffe135d5d67abc2907eb1078daf7c1b1cb6455d": {
+        "token": "493c3452dbc6e35dd64974bc7ffe135d5d67abc2907eb1078daf7c1b1cb6455d",
+        "participantId": "viewer-1793945728459-71eeee",
+        "name": "Audience Member",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945728459-71eeee",
+        "isHost": false,
+        "roomId": "room-1793945728457-5a7af57b",
+        "joinedAt": 1793945728459,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793945728462
+  },
+  {
+    "room": {
+      "id": "room-1793945728468-f4ea652d",
+      "title": "Note Ownership Test",
+      "roomCode": "Z9W9A2",
+      "hostId": "host-1793945728468",
+      "hostName": "Host Admin",
+      "sourceVideo": {
+        "id": "src-security",
+        "title": "Security Analysis Video",
+        "creator": "SyncView Security Team",
+        "duration": 200,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80",
+        "category": "Tech",
+        "description": "Test fixture for security verification"
+      },
+      "primaryReaction": {
+        "id": "rx-security",
+        "sourceId": "src-security",
+        "creator": "Alice Host",
+        "channelName": "Alice Security",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alice Tests SyncView Security",
+        "duration": 220,
+        "introDuration": 10,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 10,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 5000,
+        "likes": 400,
+        "isPublished": true,
+        "createdAt": 1793945728419
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793945728468
+      },
+      "participants": [
+        {
+          "id": "host-1793945728468",
+          "name": "Host Admin",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793945728468,
+          "status": "watching"
+        },
+        {
+          "id": "viewer-1793945728471-2fcb47",
+          "name": "UserA",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945728471-2fcb47",
+          "isHost": false,
+          "joinedAt": 1793945728471,
+          "status": "watching"
+        },
+        {
+          "id": "viewer-1793945728473-25d23a",
+          "name": "UserB",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945728473-25d23a",
+          "isHost": false,
+          "joinedAt": 1793945728473,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793945728468",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: Z9W9A2",
+          "timestamp": 1793945728468,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793945728471",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "UserA joined the party.",
+          "timestamp": 1793945728471,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793945728473",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "UserB joined the party.",
+          "timestamp": 1793945728473,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793945728468
+    },
+    "hostToken": "f89227ca2830e1d1dfc8348c0024c9a0d0a6e37a17838bddcb08cc60dcd634dc",
+    "sessions": {
+      "608b705181f64148a44e4292f63546395acac7b4d8ac46f869ad6593d00a7b04": {
+        "token": "608b705181f64148a44e4292f63546395acac7b4d8ac46f869ad6593d00a7b04",
+        "participantId": "host-1793945728468",
+        "name": "Host Admin",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793945728468-f4ea652d",
+        "joinedAt": 1793945728468,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      },
+      "dc91efaaab4e26e9556bb35ec9f9d89ff1d71ef480e38d585650d9f8aaa2ab0f": {
+        "token": "dc91efaaab4e26e9556bb35ec9f9d89ff1d71ef480e38d585650d9f8aaa2ab0f",
+        "participantId": "viewer-1793945728471-2fcb47",
+        "name": "UserA",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945728471-2fcb47",
+        "isHost": false,
+        "roomId": "room-1793945728468-f4ea652d",
+        "joinedAt": 1793945728471,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      },
+      "ab7215bca8967dd44e6e2b7541d78102d26bcdef94713e955a05e79da91bb8b5": {
+        "token": "ab7215bca8967dd44e6e2b7541d78102d26bcdef94713e955a05e79da91bb8b5",
+        "participantId": "viewer-1793945728473-25d23a",
+        "name": "UserB",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945728473-25d23a",
+        "isHost": false,
+        "roomId": "room-1793945728468-f4ea652d",
+        "joinedAt": 1793945728473,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793945728478
+  },
+  {
+    "room": {
+      "id": "room-1793945728485-e072e146",
+      "title": "Sanitization Test Room",
+      "roomCode": "QUKXF6",
+      "hostId": "host-1793945728485",
+      "hostName": "Host1",
+      "sourceVideo": {
+        "id": "src-security",
+        "title": "Security Analysis Video",
+        "creator": "SyncView Security Team",
+        "duration": 200,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80",
+        "category": "Tech",
+        "description": "Test fixture for security verification"
+      },
+      "primaryReaction": {
+        "id": "rx-security",
+        "sourceId": "src-security",
+        "creator": "Alice Host",
+        "channelName": "Alice Security",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alice Tests SyncView Security",
+        "duration": 220,
+        "introDuration": 10,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 10,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [
+          {
+            "id": "note-1793945728493-46f364",
+            "userId": "viewer-1793945728488-950ee3",
+            "userName": "Tester",
+            "sourceTimestamp": 10,
+            "reactionTimestamp": 20,
+            "text": "&lt;script&gt;alert(&quot;pwned&quot;)&lt;&#x2F;script&gt;&lt;img src=x onerror=alert(1)&gt;",
+            "isPublic": true,
+            "createdAt": 1793945728493
+          }
+        ],
+        "views": 5000,
+        "likes": 400,
+        "isPublished": true,
+        "createdAt": 1793945728419
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793945728485
+      },
+      "participants": [
+        {
+          "id": "host-1793945728485",
+          "name": "Host1",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793945728485,
+          "status": "watching"
+        },
+        {
+          "id": "viewer-1793945728488-950ee3",
+          "name": "Tester",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945728488-950ee3",
+          "isHost": false,
+          "joinedAt": 1793945728488,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793945728485",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: QUKXF6",
+          "timestamp": 1793945728485,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793945728488",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "Tester joined the party.",
+          "timestamp": 1793945728488,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793945728491-b652",
+          "senderId": "viewer-1793945728488-950ee3",
+          "senderName": "Tester",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945728488-950ee3",
+          "text": "&lt;script&gt;alert(&quot;pwned&quot;)&lt;&#x2F;script&gt;&lt;img src=x onerror=alert(1)&gt;",
+          "timestamp": 1793945728491,
+          "isHost": false
+        }
+      ],
+      "notes": [
+        {
+          "id": "note-1793945728493-46f364",
+          "userId": "viewer-1793945728488-950ee3",
+          "userName": "Tester",
+          "sourceTimestamp": 10,
+          "reactionTimestamp": 20,
+          "text": "&lt;script&gt;alert(&quot;pwned&quot;)&lt;&#x2F;script&gt;&lt;img src=x onerror=alert(1)&gt;",
+          "isPublic": true,
+          "createdAt": 1793945728493
+        }
+      ],
+      "isLocked": false,
+      "createdAt": 1793945728485
+    },
+    "hostToken": "6048bfae702d592cc94563842c197156afe1f9524b9c4cd2b8a63b22799352e7",
+    "sessions": {
+      "f7ed3efcdcb2e566a1ef882226f6bc8f9f763f7f4a146433add063be4da66dff": {
+        "token": "f7ed3efcdcb2e566a1ef882226f6bc8f9f763f7f4a146433add063be4da66dff",
+        "participantId": "host-1793945728485",
+        "name": "Host1",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793945728485-e072e146",
+        "joinedAt": 1793945728485,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      },
+      "23a7531f2953d52bcc0f7dfbb4ac695469fdb5420258cab5ddea4aedc536f481": {
+        "token": "23a7531f2953d52bcc0f7dfbb4ac695469fdb5420258cab5ddea4aedc536f481",
+        "participantId": "viewer-1793945728488-950ee3",
+        "name": "Tester",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793945728488-950ee3",
+        "isHost": false,
+        "roomId": "room-1793945728485-e072e146",
+        "joinedAt": 1793945728488,
+        "lastMessageTime": 1793945728491,
+        "messageWindowCount": 1
+      }
+    },
+    "lastActivity": 1793945728493
+  },
+  {
+    "room": {
+      "id": "room-1793969578423-00be5609",
+      "title": "Neon Premiere Party",
+      "roomCode": "NL35KE",
+      "hostId": "host-1793969578424",
+      "hostName": "Captain Alex",
+      "sourceVideo": {
+        "id": "source-1",
+        "title": "Cyberpunk Odyssey",
+        "creator": "Neon Studio",
+        "duration": 300,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80",
+        "category": "Gaming",
+        "description": "Futuristic teaser"
+      },
+      "primaryReaction": {
+        "id": "rx-1",
+        "sourceId": "source-1",
+        "creator": "Alex Rivers",
+        "channelName": "Alex Reacts",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alex Reacts to Cyberpunk Odyssey",
+        "duration": 340,
+        "introDuration": 15,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 15,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 12000,
+        "likes": 980,
+        "isPublished": true,
+        "createdAt": 1793969578403
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793969578424
+      },
+      "participants": [
+        {
+          "id": "host-1793969578424",
+          "name": "Captain Alex",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793969578424,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793969578424",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: NL35KE",
+          "timestamp": 1793969578424,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793969578424
+    },
+    "hostToken": "c3cdea96621daa93df4e7d55d5e8717685d0d1cae2443585c237c26da3d4fa3a",
+    "sessions": {
+      "25f2db75197a65a7e83b4704a0b2409d01f8dd0c50aff731cf8b3259d63eb311": {
+        "token": "25f2db75197a65a7e83b4704a0b2409d01f8dd0c50aff731cf8b3259d63eb311",
+        "participantId": "host-1793969578424",
+        "name": "Captain Alex",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793969578423-00be5609",
+        "joinedAt": 1793969578424,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793969578424
+  },
+  {
+    "room": {
+      "id": "room-1793969578432-19e797af",
+      "title": "Premiere",
+      "roomCode": "38XGXT",
+      "hostId": "host-1793969578433",
+      "hostName": "Host1",
+      "sourceVideo": {
+        "id": "source-1",
+        "title": "Cyberpunk Odyssey",
+        "creator": "Neon Studio",
+        "duration": 300,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80",
+        "category": "Gaming",
+        "description": "Futuristic teaser"
+      },
+      "primaryReaction": {
+        "id": "rx-1",
+        "sourceId": "source-1",
+        "creator": "Alex Rivers",
+        "channelName": "Alex Reacts",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alex Reacts to Cyberpunk Odyssey",
+        "duration": 340,
+        "introDuration": 15,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 15,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 12000,
+        "likes": 980,
+        "isPublished": true,
+        "createdAt": 1793969578403
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": true,
+        "sourceTime": 12.5,
+        "playbackRate": 1,
+        "seq": 2,
+        "serverTimestamp": 1793969578436
+      },
+      "participants": [
+        {
+          "id": "host-1793969578433",
+          "name": "Host1",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793969578433,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793969578433",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: 38XGXT",
+          "timestamp": 1793969578433,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793969578433
+    },
+    "hostToken": "58489bb838a0901d39cb09200d5d3fbda0ab38c71f0edc8576ba999cfd617f7b",
+    "sessions": {
+      "0f709e473b1a22f251e0ff930eb638ffc74578cfe9f909bd81605be6a5d41c1f": {
+        "token": "0f709e473b1a22f251e0ff930eb638ffc74578cfe9f909bd81605be6a5d41c1f",
+        "participantId": "host-1793969578433",
+        "name": "Host1",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793969578432-19e797af",
+        "joinedAt": 1793969578433,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793969578436
+  },
+  {
+    "room": {
+      "id": "room-1793969578444-a19d9625",
+      "title": "Spoof Test Room",
+      "roomCode": "53CJ4V",
+      "hostId": "host-1793969578445",
+      "hostName": "Legitimate Host",
+      "sourceVideo": {
+        "id": "src-security",
+        "title": "Security Analysis Video",
+        "creator": "SyncView Security Team",
+        "duration": 200,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80",
+        "category": "Tech",
+        "description": "Test fixture for security verification"
+      },
+      "primaryReaction": {
+        "id": "rx-security",
+        "sourceId": "src-security",
+        "creator": "Alice Host",
+        "channelName": "Alice Security",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alice Tests SyncView Security",
+        "duration": 220,
+        "introDuration": 10,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 10,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 5000,
+        "likes": 400,
+        "isPublished": true,
+        "createdAt": 1793969578426
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793969578445
+      },
+      "participants": [
+        {
+          "id": "host-1793969578445",
+          "name": "Legitimate Host",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793969578445,
+          "status": "watching"
+        },
+        {
+          "id": "viewer-1793969578453-37ef67",
+          "name": "GenuineViewer",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969578453-37ef67",
+          "isHost": false,
+          "joinedAt": 1793969578453,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793969578445",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: 53CJ4V",
+          "timestamp": 1793969578445,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793969578453",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "GenuineViewer joined the party.",
+          "timestamp": 1793969578453,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793969578456-41d0",
+          "senderId": "viewer-1793969578453-37ef67",
+          "senderName": "GenuineViewer",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969578453-37ef67",
+          "text": "Trying to impersonate admin",
+          "timestamp": 1793969578456,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793969578445
+    },
+    "hostToken": "d7433a8f9d87094437d251433d146c8dfe58af2e2e11ed5e069a75c90af1224c",
+    "sessions": {
+      "bf5c8e12d88296b04e8e8980c4780a1cd5336e2c7a145b39030cd1f81bd7011b": {
+        "token": "bf5c8e12d88296b04e8e8980c4780a1cd5336e2c7a145b39030cd1f81bd7011b",
+        "participantId": "host-1793969578445",
+        "name": "Legitimate Host",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793969578444-a19d9625",
+        "joinedAt": 1793969578445,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      },
+      "f5eddfbac2e9ce561867082ae89fe638d4f4eda10eb440a7b9f1ac78d667e5a0": {
+        "token": "f5eddfbac2e9ce561867082ae89fe638d4f4eda10eb440a7b9f1ac78d667e5a0",
+        "participantId": "viewer-1793969578453-37ef67",
+        "name": "GenuineViewer",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969578453-37ef67",
+        "isHost": false,
+        "roomId": "room-1793969578444-a19d9625",
+        "joinedAt": 1793969578453,
+        "lastMessageTime": 1793969578456,
+        "messageWindowCount": 1
+      }
+    },
+    "lastActivity": 1793969578456
+  },
+  {
+    "room": {
+      "id": "room-1793969578460-af892a81",
+      "title": "Rate Limit Party",
+      "roomCode": "GCPR39",
+      "hostId": "host-1793969578460",
+      "hostName": "Host1",
+      "sourceVideo": {
+        "id": "source-1",
+        "title": "Cyberpunk Odyssey",
+        "creator": "Neon Studio",
+        "duration": 300,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80",
+        "category": "Gaming",
+        "description": "Futuristic teaser"
+      },
+      "primaryReaction": {
+        "id": "rx-1",
+        "sourceId": "source-1",
+        "creator": "Alex Rivers",
+        "channelName": "Alex Reacts",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alex Reacts to Cyberpunk Odyssey",
+        "duration": 340,
+        "introDuration": 15,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 15,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 12000,
+        "likes": 980,
+        "isPublished": true,
+        "createdAt": 1793969578403
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793969578460
+      },
+      "participants": [
+        {
+          "id": "host-1793969578460",
+          "name": "Host1",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793969578460,
+          "status": "watching"
+        },
+        {
+          "id": "viewer-1793969578464-1a8846",
+          "name": "Spammy",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969578464-1a8846",
+          "isHost": false,
+          "joinedAt": 1793969578464,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793969578460",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: GCPR39",
+          "timestamp": 1793969578460,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793969578464",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "Spammy joined the party.",
+          "timestamp": 1793969578464,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793969578466-3f45",
+          "senderId": "viewer-1793969578464-1a8846",
+          "senderName": "Spammy",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969578464-1a8846",
+          "text": "Hello 1",
+          "timestamp": 1793969578466,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793969578460
+    },
+    "hostToken": "bb9bf2da0a49de8bcd69a0855c8e1f34810374ce0c34d564baffff86568b98f2",
+    "sessions": {
+      "d74c4e02117687974dc28b7eef409deef406866faaab760dc2c828e302f7362a": {
+        "token": "d74c4e02117687974dc28b7eef409deef406866faaab760dc2c828e302f7362a",
+        "participantId": "host-1793969578460",
+        "name": "Host1",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793969578460-af892a81",
+        "joinedAt": 1793969578460,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      },
+      "5d05b9d78bddfaf7a5ee8f9d07576f3346f1b3df076cd2f391f7d3ade05456b9": {
+        "token": "5d05b9d78bddfaf7a5ee8f9d07576f3346f1b3df076cd2f391f7d3ade05456b9",
+        "participantId": "viewer-1793969578464-1a8846",
+        "name": "Spammy",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969578464-1a8846",
+        "isHost": false,
+        "roomId": "room-1793969578460-af892a81",
+        "joinedAt": 1793969578464,
+        "lastMessageTime": 1793969578466,
+        "messageWindowCount": 1
+      }
+    },
+    "lastActivity": 1793969578466
+  },
+  {
+    "room": {
+      "id": "room-1793969578471-9ebec247",
+      "title": "Notes Test",
+      "roomCode": "RJGYDQ",
+      "hostId": "host-1793969578471",
+      "hostName": "Host1",
+      "sourceVideo": {
+        "id": "source-1",
+        "title": "Cyberpunk Odyssey",
+        "creator": "Neon Studio",
+        "duration": 300,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80",
+        "category": "Gaming",
+        "description": "Futuristic teaser"
+      },
+      "primaryReaction": {
+        "id": "rx-1",
+        "sourceId": "source-1",
+        "creator": "Alex Rivers",
+        "channelName": "Alex Reacts",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alex Reacts to Cyberpunk Odyssey",
+        "duration": 340,
+        "introDuration": 15,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 15,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 12000,
+        "likes": 980,
+        "isPublished": true,
+        "createdAt": 1793969578403
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793969578471
+      },
+      "participants": [
+        {
+          "id": "host-1793969578471",
+          "name": "Host1",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793969578471,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793969578471",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: RJGYDQ",
+          "timestamp": 1793969578471,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793969578471
+    },
+    "hostToken": "41e96d44c811e0a709ea42790c839f503cb005dc3dc94431cba51f133573a3a7",
+    "sessions": {
+      "958923483c08a6700d975e0d75798b7116fedf536f3fc797aa24f0b2b11b6b5d": {
+        "token": "958923483c08a6700d975e0d75798b7116fedf536f3fc797aa24f0b2b11b6b5d",
+        "participantId": "host-1793969578471",
+        "name": "Host1",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793969578471-9ebec247",
+        "joinedAt": 1793969578471,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793969578471
+  },
+  {
+    "room": {
+      "id": "room-1793969578479-a241dbce",
+      "title": "Command Auth Test",
+      "roomCode": "R3Z9B4",
+      "hostId": "host-1793969578479",
+      "hostName": "Real Host",
+      "sourceVideo": {
+        "id": "src-security",
+        "title": "Security Analysis Video",
+        "creator": "SyncView Security Team",
+        "duration": 200,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80",
+        "category": "Tech",
+        "description": "Test fixture for security verification"
+      },
+      "primaryReaction": {
+        "id": "rx-security",
+        "sourceId": "src-security",
+        "creator": "Alice Host",
+        "channelName": "Alice Security",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alice Tests SyncView Security",
+        "duration": 220,
+        "introDuration": 10,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 10,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 5000,
+        "likes": 400,
+        "isPublished": true,
+        "createdAt": 1793969578426
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 45,
+        "playbackRate": 1,
+        "seq": 2,
+        "serverTimestamp": 1793969578487
+      },
+      "participants": [
+        {
+          "id": "host-1793969578479",
+          "name": "Real Host",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793969578479,
+          "status": "watching"
+        },
+        {
+          "id": "viewer-1793969578484-6954a2",
+          "name": "Audience Member",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969578484-6954a2",
+          "isHost": false,
+          "joinedAt": 1793969578484,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793969578479",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: R3Z9B4",
+          "timestamp": 1793969578479,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793969578484",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "Audience Member joined the party.",
+          "timestamp": 1793969578484,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793969578479
+    },
+    "hostToken": "c7eea8033922371b03fff03aa760f44db7a84a13ebed773b895e34f6e4e31265",
+    "sessions": {
+      "97798543b4fc5a414cdb55a7ab21ddfb012b7ddccf501b482e18ecc20bf18a2f": {
+        "token": "97798543b4fc5a414cdb55a7ab21ddfb012b7ddccf501b482e18ecc20bf18a2f",
+        "participantId": "host-1793969578479",
+        "name": "Real Host",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793969578479-a241dbce",
+        "joinedAt": 1793969578479,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      },
+      "320f0477a0557d5809ef95323434d3b73867b1549d1962f413104ddb1ba9e8c9": {
+        "token": "320f0477a0557d5809ef95323434d3b73867b1549d1962f413104ddb1ba9e8c9",
+        "participantId": "viewer-1793969578484-6954a2",
+        "name": "Audience Member",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969578484-6954a2",
+        "isHost": false,
+        "roomId": "room-1793969578479-a241dbce",
+        "joinedAt": 1793969578484,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793969578487
+  },
+  {
+    "room": {
+      "id": "room-1793969578492-bb285da7",
+      "title": "Note Ownership Test",
+      "roomCode": "KS37Q9",
+      "hostId": "host-1793969578492",
+      "hostName": "Host Admin",
+      "sourceVideo": {
+        "id": "src-security",
+        "title": "Security Analysis Video",
+        "creator": "SyncView Security Team",
+        "duration": 200,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80",
+        "category": "Tech",
+        "description": "Test fixture for security verification"
+      },
+      "primaryReaction": {
+        "id": "rx-security",
+        "sourceId": "src-security",
+        "creator": "Alice Host",
+        "channelName": "Alice Security",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alice Tests SyncView Security",
+        "duration": 220,
+        "introDuration": 10,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 10,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 5000,
+        "likes": 400,
+        "isPublished": true,
+        "createdAt": 1793969578426
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793969578492
+      },
+      "participants": [
+        {
+          "id": "host-1793969578492",
+          "name": "Host Admin",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793969578492,
+          "status": "watching"
+        },
+        {
+          "id": "viewer-1793969578497-814112",
+          "name": "UserA",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969578497-814112",
+          "isHost": false,
+          "joinedAt": 1793969578497,
+          "status": "watching"
+        },
+        {
+          "id": "viewer-1793969578500-ad3ce8",
+          "name": "UserB",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969578500-ad3ce8",
+          "isHost": false,
+          "joinedAt": 1793969578500,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793969578492",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: KS37Q9",
+          "timestamp": 1793969578492,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793969578497",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "UserA joined the party.",
+          "timestamp": 1793969578497,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793969578500",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "UserB joined the party.",
+          "timestamp": 1793969578500,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793969578492
+    },
+    "hostToken": "1992ad739afc4d07f4a6dc362704091019e843e86841b8434891856fbe3ff575",
+    "sessions": {
+      "e74f897b2e3df007fe4817497ec8d2eaa1ce76c77475f3b426186d81eb7fc6e1": {
+        "token": "e74f897b2e3df007fe4817497ec8d2eaa1ce76c77475f3b426186d81eb7fc6e1",
+        "participantId": "host-1793969578492",
+        "name": "Host Admin",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793969578492-bb285da7",
+        "joinedAt": 1793969578492,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      },
+      "dc9055d00284149aad4d299bdc3137e50be3491f5992649e536832954e8b859f": {
+        "token": "dc9055d00284149aad4d299bdc3137e50be3491f5992649e536832954e8b859f",
+        "participantId": "viewer-1793969578497-814112",
+        "name": "UserA",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969578497-814112",
+        "isHost": false,
+        "roomId": "room-1793969578492-bb285da7",
+        "joinedAt": 1793969578497,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      },
+      "926bdc601732d057aeabfc010e2365560aacd56f5dfa85a6a45e56cf11f510c5": {
+        "token": "926bdc601732d057aeabfc010e2365560aacd56f5dfa85a6a45e56cf11f510c5",
+        "participantId": "viewer-1793969578500-ad3ce8",
+        "name": "UserB",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969578500-ad3ce8",
+        "isHost": false,
+        "roomId": "room-1793969578492-bb285da7",
+        "joinedAt": 1793969578500,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793969578505
+  },
+  {
+    "room": {
+      "id": "room-1793969578511-44bde157",
+      "title": "Sanitization Test Room",
+      "roomCode": "VFF7A5",
+      "hostId": "host-1793969578511",
+      "hostName": "Host1",
+      "sourceVideo": {
+        "id": "src-security",
+        "title": "Security Analysis Video",
+        "creator": "SyncView Security Team",
+        "duration": 200,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80",
+        "category": "Tech",
+        "description": "Test fixture for security verification"
+      },
+      "primaryReaction": {
+        "id": "rx-security",
+        "sourceId": "src-security",
+        "creator": "Alice Host",
+        "channelName": "Alice Security",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alice Tests SyncView Security",
+        "duration": 220,
+        "introDuration": 10,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 10,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [
+          {
+            "id": "note-1793969578522-4f12c2",
+            "userId": "viewer-1793969578516-eb7d09",
+            "userName": "Tester",
+            "sourceTimestamp": 10,
+            "reactionTimestamp": 20,
+            "text": "&lt;script&gt;alert(&quot;pwned&quot;)&lt;&#x2F;script&gt;&lt;img src=x onerror=alert(1)&gt;",
+            "isPublic": true,
+            "createdAt": 1793969578522
+          }
+        ],
+        "views": 5000,
+        "likes": 400,
+        "isPublished": true,
+        "createdAt": 1793969578426
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793969578511
+      },
+      "participants": [
+        {
+          "id": "host-1793969578511",
+          "name": "Host1",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793969578511,
+          "status": "watching"
+        },
+        {
+          "id": "viewer-1793969578516-eb7d09",
+          "name": "Tester",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969578516-eb7d09",
+          "isHost": false,
+          "joinedAt": 1793969578516,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793969578511",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: VFF7A5",
+          "timestamp": 1793969578511,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793969578516",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "Tester joined the party.",
+          "timestamp": 1793969578516,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793969578520-8f68",
+          "senderId": "viewer-1793969578516-eb7d09",
+          "senderName": "Tester",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969578516-eb7d09",
+          "text": "&lt;script&gt;alert(&quot;pwned&quot;)&lt;&#x2F;script&gt;&lt;img src=x onerror=alert(1)&gt;",
+          "timestamp": 1793969578520,
+          "isHost": false
+        }
+      ],
+      "notes": [
+        {
+          "id": "note-1793969578522-4f12c2",
+          "userId": "viewer-1793969578516-eb7d09",
+          "userName": "Tester",
+          "sourceTimestamp": 10,
+          "reactionTimestamp": 20,
+          "text": "&lt;script&gt;alert(&quot;pwned&quot;)&lt;&#x2F;script&gt;&lt;img src=x onerror=alert(1)&gt;",
+          "isPublic": true,
+          "createdAt": 1793969578522
+        }
+      ],
+      "isLocked": false,
+      "createdAt": 1793969578511
+    },
+    "hostToken": "b01895bd0bfd79c34f9f4ea3b6544771cfaeddf1850e478436378842a27ddcfe",
+    "sessions": {
+      "4f573d38231543943a32836fce27b8bfdabe41a50187664bbcdcfaf77b0a2724": {
+        "token": "4f573d38231543943a32836fce27b8bfdabe41a50187664bbcdcfaf77b0a2724",
+        "participantId": "host-1793969578511",
+        "name": "Host1",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793969578511-44bde157",
+        "joinedAt": 1793969578511,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      },
+      "db3a65c1626af6c260af1edaa6483461ff5ceba6c07f701d74e271ce88cbc3e1": {
+        "token": "db3a65c1626af6c260af1edaa6483461ff5ceba6c07f701d74e271ce88cbc3e1",
+        "participantId": "viewer-1793969578516-eb7d09",
+        "name": "Tester",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969578516-eb7d09",
+        "isHost": false,
+        "roomId": "room-1793969578511-44bde157",
+        "joinedAt": 1793969578516,
+        "lastMessageTime": 1793969578520,
+        "messageWindowCount": 1
+      }
+    },
+    "lastActivity": 1793969578522
+  },
+  {
+    "room": {
+      "id": "room-1793969583785-cc61940d",
+      "title": "🔥 Live Film Breakdown: Aethelgard Reveal",
+      "roomCode": "H2CAG8",
+      "hostId": "host-1793969583786",
+      "hostName": "Marcus Vance",
+      "sourceVideo": {
+        "id": "src-scifi-teaser",
+        "title": "Aethelgard: The Edge of Horizon (Official Cinematic Teaser)",
+        "creator": "Illumina Studios",
+        "duration": 180,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80",
+        "category": "Movies & TV",
+        "description": "The viral high-concept sci-fi trailer that stunned viewers with revolutionary VFX and emotional soundtrack.",
+        "releaseYear": 2026
+      },
+      "primaryReaction": {
+        "id": "rx-scifi-marcus",
+        "sourceId": "src-scifi-teaser",
+        "creator": "Marcus Vance",
+        "channelName": "Vance Cinema Reviews",
+        "avatar": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&q=80",
+        "title": "Film Critic SPEECHLESS at Aethelgard Reveal! (Detailed Shot Analysis)",
+        "duration": 204,
+        "introDuration": 14,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80",
+        "anchors": [
+          {
+            "id": "anc-1",
+            "sourceTime": 0,
+            "reactionTime": 14,
+            "type": "intro",
+            "label": "Reaction starts watching",
+            "notes": "Creator says \"Alright guys, let's jump in!\""
+          },
+          {
+            "id": "anc-2",
+            "sourceTime": 45,
+            "reactionTime": 59,
+            "type": "pause",
+            "label": "Pause for VFX commentary",
+            "notes": "Marcus pauses to analyze lighting in the portal scene"
+          },
+          {
+            "id": "anc-3",
+            "sourceTime": 45,
+            "reactionTime": 69,
+            "type": "pause",
+            "label": "Resumes playback",
+            "notes": "Resuming source after explanation"
+          },
+          {
+            "id": "anc-4",
+            "sourceTime": 180,
+            "reactionTime": 204,
+            "type": "outro",
+            "label": "Final reaction verdict",
+            "notes": "Outro wrap-up"
+          }
+        ],
+        "chapters": [
+          {
+            "id": "ch-1",
+            "title": "Intro & Expectations",
+            "sourceTimestamp": 0,
+            "reactionTimestamp": 0,
+            "description": "Marcus explains why he has been waiting for this teaser."
+          },
+          {
+            "id": "ch-2",
+            "title": "The Sky Portal Drop",
+            "sourceTimestamp": 28,
+            "reactionTimestamp": 42,
+            "description": "Reaction to the breathtaking CGI portal drop."
+          },
+          {
+            "id": "ch-3",
+            "title": "In-Depth Breakdown of Lighting",
+            "sourceTimestamp": 45,
+            "reactionTimestamp": 59,
+            "description": "Breakdown of anamorphic lens flares."
+          },
+          {
+            "id": "ch-4",
+            "title": "The Plot Twist Climax",
+            "sourceTimestamp": 135,
+            "reactionTimestamp": 159,
+            "description": "Jaw-dropping villain reveal."
+          },
+          {
+            "id": "ch-5",
+            "title": "Final Rating & Theories",
+            "sourceTimestamp": 180,
+            "reactionTimestamp": 185,
+            "description": "Wrap-up and premiere date discussion."
+          }
+        ],
+        "highlights": [
+          {
+            "id": "hl-1",
+            "title": "Marcus Drops His Coffee",
+            "type": "shock",
+            "sourceTimestamp": 28,
+            "reactionTimestamp": 42
+          },
+          {
+            "id": "hl-2",
+            "title": "\"Did You See That Reflection?!\"",
+            "type": "breakdown",
+            "sourceTimestamp": 45,
+            "reactionTimestamp": 60
+          },
+          {
+            "id": "hl-3",
+            "title": "Pure Goosebumps at Theme Music",
+            "type": "hype",
+            "sourceTimestamp": 150,
+            "reactionTimestamp": 174
+          }
+        ],
+        "notes": [
+          {
+            "id": "note-1",
+            "userId": "u-101",
+            "userName": "Elena Rostova",
+            "userAvatar": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80",
+            "sourceTimestamp": 28,
+            "reactionTimestamp": 42,
+            "text": "The particle physics here took 6 months to render according to the director AMA!",
+            "isPublic": true,
+            "createdAt": 1793883183778
+          },
+          {
+            "id": "note-2",
+            "userId": "u-102",
+            "userName": "Dave K.",
+            "userAvatar": "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=120&q=80",
+            "sourceTimestamp": 45,
+            "reactionTimestamp": 60,
+            "text": "Marcus is totally right about the anamorphic bokeh, that is real glass not purely digital.",
+            "isPublic": true,
+            "createdAt": 1793926383778
+          }
+        ],
+        "views": 89400,
+        "likes": 6720,
+        "isPublished": true,
+        "createdAt": 1793796783778
+      },
+      "additionalReactions": [
+        {
+          "id": "rx-scifi-kai",
+          "sourceId": "src-scifi-teaser",
+          "creator": "Kai & Maya",
+          "channelName": "DuoReact Studios",
+          "avatar": "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=160&q=80",
+          "title": "WE NEVER EXPECTED THIS! Aethelgard Live Reaction & Theory Crafting",
+          "duration": 198,
+          "introDuration": 18,
+          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+          "thumbnail": "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80",
+          "anchors": [
+            {
+              "id": "anc-k1",
+              "sourceTime": 0,
+              "reactionTime": 18,
+              "type": "intro",
+              "label": "Source start"
+            },
+            {
+              "id": "anc-k2",
+              "sourceTime": 180,
+              "reactionTime": 198,
+              "type": "linear",
+              "label": "Synced through end"
+            }
+          ],
+          "chapters": [
+            {
+              "id": "ch-k1",
+              "title": "Greeting & Hype",
+              "sourceTimestamp": 0,
+              "reactionTimestamp": 0
+            },
+            {
+              "id": "ch-k2",
+              "title": "Watching Teaser",
+              "sourceTimestamp": 0,
+              "reactionTimestamp": 18
+            },
+            {
+              "id": "ch-k3",
+              "title": "Post-Teaser Screaming",
+              "sourceTimestamp": 180,
+              "reactionTimestamp": 185
+            }
+          ],
+          "highlights": [
+            {
+              "id": "hl-k1",
+              "title": "Maya screams at jump scare",
+              "type": "shock",
+              "sourceTimestamp": 85,
+              "reactionTimestamp": 103
+            }
+          ],
+          "notes": [],
+          "views": 64200,
+          "likes": 4900,
+          "isPublished": true,
+          "createdAt": 1793839983778
+        },
+        {
+          "id": "rx-scifi-sarah",
+          "sourceId": "src-scifi-teaser",
+          "creator": "Dr. Sarah Lin (Astrophysicist)",
+          "channelName": "ScienceAtTheCinema",
+          "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=160&q=80",
+          "title": "Astrophysicist Evaluates Sci-Fi Realism in Aethelgard Trailer",
+          "duration": 215,
+          "introDuration": 20,
+          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+          "thumbnail": "https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=800&q=80",
+          "anchors": [
+            {
+              "id": "anc-s1",
+              "sourceTime": 0,
+              "reactionTime": 20,
+              "type": "intro",
+              "label": "Intro discussion"
+            },
+            {
+              "id": "anc-s2",
+              "sourceTime": 70,
+              "reactionTime": 90,
+              "type": "pause",
+              "label": "Relativistic space explanation"
+            },
+            {
+              "id": "anc-s3",
+              "sourceTime": 70,
+              "reactionTime": 105,
+              "type": "pause",
+              "label": "Resume"
+            },
+            {
+              "id": "anc-s4",
+              "sourceTime": 180,
+              "reactionTime": 215,
+              "type": "linear",
+              "label": "End"
+            }
+          ],
+          "chapters": [],
+          "highlights": [
+            {
+              "id": "hl-s1",
+              "title": "\"Actually accurate accretion disk!\"",
+              "type": "breakdown",
+              "sourceTimestamp": 70,
+              "reactionTimestamp": 95
+            }
+          ],
+          "notes": [],
+          "views": 41000,
+          "likes": 3800,
+          "isPublished": true,
+          "createdAt": 1793883183778
+        }
+      ],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793969583786
+      },
+      "participants": [
+        {
+          "id": "host-1793969583786",
+          "name": "Marcus Vance",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793969583786,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793969583786",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: H2CAG8",
+          "timestamp": 1793969583786,
+          "isHost": false
+        }
+      ],
+      "notes": [
+        {
+          "id": "note-1",
+          "userId": "u-101",
+          "userName": "Elena Rostova",
+          "userAvatar": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80",
+          "sourceTimestamp": 28,
+          "reactionTimestamp": 42,
+          "text": "The particle physics here took 6 months to render according to the director AMA!",
+          "isPublic": true,
+          "createdAt": 1793883183778
+        },
+        {
+          "id": "note-2",
+          "userId": "u-102",
+          "userName": "Dave K.",
+          "userAvatar": "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=120&q=80",
+          "sourceTimestamp": 45,
+          "reactionTimestamp": 60,
+          "text": "Marcus is totally right about the anamorphic bokeh, that is real glass not purely digital.",
+          "isPublic": true,
+          "createdAt": 1793926383778
+        }
+      ],
+      "isLocked": false,
+      "createdAt": 1793969583786
+    },
+    "hostToken": "23cf730f4326a20f0871ab970e44d351b6be265fa64dc55ea51a64262ac9baaa",
+    "sessions": {
+      "1b563a1fe09adb8b9fb32950571933a5ccccb6597e2ec0c57fa2d594408c4921": {
+        "token": "1b563a1fe09adb8b9fb32950571933a5ccccb6597e2ec0c57fa2d594408c4921",
+        "participantId": "host-1793969583786",
+        "name": "Marcus Vance",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793969583785-cc61940d",
+        "joinedAt": 1793969583786,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793969583786
+  },
+  {
+    "room": {
+      "id": "room-1793969598533-a6166589",
+      "title": "Spoof Test Room",
+      "roomCode": "P7UEJN",
+      "hostId": "host-1793969598533",
+      "hostName": "Legitimate Host",
+      "sourceVideo": {
+        "id": "src-security",
+        "title": "Security Analysis Video",
+        "creator": "SyncView Security Team",
+        "duration": 200,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80",
+        "category": "Tech",
+        "description": "Test fixture for security verification"
+      },
+      "primaryReaction": {
+        "id": "rx-security",
+        "sourceId": "src-security",
+        "creator": "Alice Host",
+        "channelName": "Alice Security",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alice Tests SyncView Security",
+        "duration": 220,
+        "introDuration": 10,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 10,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 5000,
+        "likes": 400,
+        "isPublished": true,
+        "createdAt": 1793969598518
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793969598533
+      },
+      "participants": [
+        {
+          "id": "host-1793969598533",
+          "name": "Legitimate Host",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793969598533,
+          "status": "watching"
+        },
+        {
+          "id": "viewer-1793969598537-293343",
+          "name": "GenuineViewer",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969598537-293343",
+          "isHost": false,
+          "joinedAt": 1793969598537,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793969598533",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: P7UEJN",
+          "timestamp": 1793969598533,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793969598537",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "GenuineViewer joined the party.",
+          "timestamp": 1793969598537,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793969598540-caf5",
+          "senderId": "viewer-1793969598537-293343",
+          "senderName": "GenuineViewer",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969598537-293343",
+          "text": "Trying to impersonate admin",
+          "timestamp": 1793969598540,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793969598533
+    },
+    "hostToken": "572822dfc92fd734a67433761055432b4f8f24f5c1b88bfdc83c8b58f09c6785",
+    "sessions": {
+      "0fa5ac89fcfcfcf8e8db74e4b92a63355d9286e2e760da3466ab9fba44700edc": {
+        "token": "0fa5ac89fcfcfcf8e8db74e4b92a63355d9286e2e760da3466ab9fba44700edc",
+        "participantId": "host-1793969598533",
+        "name": "Legitimate Host",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793969598533-a6166589",
+        "joinedAt": 1793969598533,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      },
+      "c4162480a50fa41fc086504ffaafecd912c7fcecac66c1a38533b0f90f5094a5": {
+        "token": "c4162480a50fa41fc086504ffaafecd912c7fcecac66c1a38533b0f90f5094a5",
+        "participantId": "viewer-1793969598537-293343",
+        "name": "GenuineViewer",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969598537-293343",
+        "isHost": false,
+        "roomId": "room-1793969598533-a6166589",
+        "joinedAt": 1793969598537,
+        "lastMessageTime": 1793969598540,
+        "messageWindowCount": 1
+      }
+    },
+    "lastActivity": 1793969598540
+  },
+  {
+    "room": {
+      "id": "room-1793969598545-c3a88183",
+      "title": "Room Alpha",
+      "roomCode": "8RSSRH",
+      "hostId": "host-1793969598545",
+      "hostName": "Host A",
+      "sourceVideo": {
+        "id": "src-security",
+        "title": "Security Analysis Video",
+        "creator": "SyncView Security Team",
+        "duration": 200,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80",
+        "category": "Tech",
+        "description": "Test fixture for security verification"
+      },
+      "primaryReaction": {
+        "id": "rx-security",
+        "sourceId": "src-security",
+        "creator": "Alice Host",
+        "channelName": "Alice Security",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alice Tests SyncView Security",
+        "duration": 220,
+        "introDuration": 10,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 10,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 5000,
+        "likes": 400,
+        "isPublished": true,
+        "createdAt": 1793969598518
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793969598545
+      },
+      "participants": [
+        {
+          "id": "host-1793969598545",
+          "name": "Host A",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793969598545,
+          "status": "watching"
+        },
+        {
+          "id": "viewer-1793969598551-afb2c3",
+          "name": "Member Alpha",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969598551-afb2c3",
+          "isHost": false,
+          "joinedAt": 1793969598551,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793969598545",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: 8RSSRH",
+          "timestamp": 1793969598545,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793969598551",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "Member Alpha joined the party.",
+          "timestamp": 1793969598551,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793969598545
+    },
+    "hostToken": "c9b70669639de784fcf4e04328c2f717b24e31e0de113eb0a608dda4674a2cf8",
+    "sessions": {
+      "02b6b6a4768e5be46996b751c5a8b21795c9855c2a9b31edf95fdaed038d47a5": {
+        "token": "02b6b6a4768e5be46996b751c5a8b21795c9855c2a9b31edf95fdaed038d47a5",
+        "participantId": "host-1793969598545",
+        "name": "Host A",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793969598545-c3a88183",
+        "joinedAt": 1793969598545,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      },
+      "81dd3278374b90816b4c1dce27e160cfec319f6a8c5e8bc775f6df4a5dbbb4b4": {
+        "token": "81dd3278374b90816b4c1dce27e160cfec319f6a8c5e8bc775f6df4a5dbbb4b4",
+        "participantId": "viewer-1793969598551-afb2c3",
+        "name": "Member Alpha",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969598551-afb2c3",
+        "isHost": false,
+        "roomId": "room-1793969598545-c3a88183",
+        "joinedAt": 1793969598551,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793969598551
+  },
+  {
+    "room": {
+      "id": "room-1793969598549-b2a4ab8a",
+      "title": "Room Beta",
+      "roomCode": "JKH773",
+      "hostId": "host-1793969598549",
+      "hostName": "Host B",
+      "sourceVideo": {
+        "id": "src-security",
+        "title": "Security Analysis Video",
+        "creator": "SyncView Security Team",
+        "duration": 200,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80",
+        "category": "Tech",
+        "description": "Test fixture for security verification"
+      },
+      "primaryReaction": {
+        "id": "rx-security",
+        "sourceId": "src-security",
+        "creator": "Alice Host",
+        "channelName": "Alice Security",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alice Tests SyncView Security",
+        "duration": 220,
+        "introDuration": 10,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 10,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 5000,
+        "likes": 400,
+        "isPublished": true,
+        "createdAt": 1793969598518
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793969598549
+      },
+      "participants": [
+        {
+          "id": "host-1793969598549",
+          "name": "Host B",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793969598549,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793969598549",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: JKH773",
+          "timestamp": 1793969598549,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793969598549
+    },
+    "hostToken": "a4028f2436bf254abcf6874402aa8c5c565d7d887633010be7c85fb3f1df3c47",
+    "sessions": {
+      "4761eab5284590eb5d471e6de6677989c969bc0dbc03fd89da4b6208bd914d06": {
+        "token": "4761eab5284590eb5d471e6de6677989c969bc0dbc03fd89da4b6208bd914d06",
+        "participantId": "host-1793969598549",
+        "name": "Host B",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793969598549-b2a4ab8a",
+        "joinedAt": 1793969598549,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793969598549
+  },
+  {
+    "room": {
+      "id": "room-1793969598556-fa9c8615",
+      "title": "Secret Leak Test",
+      "roomCode": "PD4HQS",
+      "hostId": "host-1793969598556",
+      "hostName": "Host Alice",
+      "sourceVideo": {
+        "id": "src-security",
+        "title": "Security Analysis Video",
+        "creator": "SyncView Security Team",
+        "duration": 200,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80",
+        "category": "Tech",
+        "description": "Test fixture for security verification"
+      },
+      "primaryReaction": {
+        "id": "rx-security",
+        "sourceId": "src-security",
+        "creator": "Alice Host",
+        "channelName": "Alice Security",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alice Tests SyncView Security",
+        "duration": 220,
+        "introDuration": 10,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 10,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 5000,
+        "likes": 400,
+        "isPublished": true,
+        "createdAt": 1793969598518
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793969598556
+      },
+      "participants": [
+        {
+          "id": "host-1793969598556",
+          "name": "Host Alice",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793969598556,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793969598556",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: PD4HQS",
+          "timestamp": 1793969598556,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793969598556
+    },
+    "hostToken": "9805fc5678b3f02315312f90dfcb83fd18d33cda7c9013ac5d61f7c86c2e20bd",
+    "sessions": {
+      "4a8308be61324c1becdf6bbbd78a9989f13c7e2703c01cc6885e6acf65e838ab": {
+        "token": "4a8308be61324c1becdf6bbbd78a9989f13c7e2703c01cc6885e6acf65e838ab",
+        "participantId": "host-1793969598556",
+        "name": "Host Alice",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793969598556-fa9c8615",
+        "joinedAt": 1793969598556,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793969598556
+  },
+  {
+    "room": {
+      "id": "room-1793969598561-b6c5344c",
+      "title": "Command Auth Test",
+      "roomCode": "8KE4V8",
+      "hostId": "host-1793969598561",
+      "hostName": "Real Host",
+      "sourceVideo": {
+        "id": "src-security",
+        "title": "Security Analysis Video",
+        "creator": "SyncView Security Team",
+        "duration": 200,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80",
+        "category": "Tech",
+        "description": "Test fixture for security verification"
+      },
+      "primaryReaction": {
+        "id": "rx-security",
+        "sourceId": "src-security",
+        "creator": "Alice Host",
+        "channelName": "Alice Security",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alice Tests SyncView Security",
+        "duration": 220,
+        "introDuration": 10,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 10,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 5000,
+        "likes": 400,
+        "isPublished": true,
+        "createdAt": 1793969598518
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 45,
+        "playbackRate": 1,
+        "seq": 2,
+        "serverTimestamp": 1793969598565
+      },
+      "participants": [
+        {
+          "id": "host-1793969598561",
+          "name": "Real Host",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793969598561,
+          "status": "watching"
+        },
+        {
+          "id": "viewer-1793969598563-216209",
+          "name": "Audience Member",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969598563-216209",
+          "isHost": false,
+          "joinedAt": 1793969598563,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793969598561",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: 8KE4V8",
+          "timestamp": 1793969598561,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793969598563",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "Audience Member joined the party.",
+          "timestamp": 1793969598563,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793969598561
+    },
+    "hostToken": "b3f8fe152b404a598a8e67f57899a3e02310c8dd8801812e76437bc54f2fe86c",
+    "sessions": {
+      "6890674f81a752774f79a18fea550c67f3f81619a80400803273ab5f49a5f88b": {
+        "token": "6890674f81a752774f79a18fea550c67f3f81619a80400803273ab5f49a5f88b",
+        "participantId": "host-1793969598561",
+        "name": "Real Host",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793969598561-b6c5344c",
+        "joinedAt": 1793969598561,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      },
+      "343f9721caea16d5ba641db739c371e660af3a7827f6414b45149b4207d5c87c": {
+        "token": "343f9721caea16d5ba641db739c371e660af3a7827f6414b45149b4207d5c87c",
+        "participantId": "viewer-1793969598563-216209",
+        "name": "Audience Member",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969598563-216209",
+        "isHost": false,
+        "roomId": "room-1793969598561-b6c5344c",
+        "joinedAt": 1793969598563,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793969598565
+  },
+  {
+    "room": {
+      "id": "room-1793969598571-1491bd6b",
+      "title": "Note Ownership Test",
+      "roomCode": "QYZS8P",
+      "hostId": "host-1793969598571",
+      "hostName": "Host Admin",
+      "sourceVideo": {
+        "id": "src-security",
+        "title": "Security Analysis Video",
+        "creator": "SyncView Security Team",
+        "duration": 200,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80",
+        "category": "Tech",
+        "description": "Test fixture for security verification"
+      },
+      "primaryReaction": {
+        "id": "rx-security",
+        "sourceId": "src-security",
+        "creator": "Alice Host",
+        "channelName": "Alice Security",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alice Tests SyncView Security",
+        "duration": 220,
+        "introDuration": 10,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 10,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [],
+        "views": 5000,
+        "likes": 400,
+        "isPublished": true,
+        "createdAt": 1793969598518
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793969598571
+      },
+      "participants": [
+        {
+          "id": "host-1793969598571",
+          "name": "Host Admin",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793969598571,
+          "status": "watching"
+        },
+        {
+          "id": "viewer-1793969598573-c5bb80",
+          "name": "UserA",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969598573-c5bb80",
+          "isHost": false,
+          "joinedAt": 1793969598573,
+          "status": "watching"
+        },
+        {
+          "id": "viewer-1793969598576-4de856",
+          "name": "UserB",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969598576-4de856",
+          "isHost": false,
+          "joinedAt": 1793969598576,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793969598571",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: QYZS8P",
+          "timestamp": 1793969598571,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793969598573",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "UserA joined the party.",
+          "timestamp": 1793969598573,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793969598576",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "UserB joined the party.",
+          "timestamp": 1793969598576,
+          "isHost": false
+        }
+      ],
+      "notes": [],
+      "isLocked": false,
+      "createdAt": 1793969598571
+    },
+    "hostToken": "acba27a26392dfac461f92bb21793e319c9a0cfe09d4473e53460d791d22febc",
+    "sessions": {
+      "c9b886d043da8efc3d3ba6f186c18b5d97beee2b4391bde559caaa0d0b339f6d": {
+        "token": "c9b886d043da8efc3d3ba6f186c18b5d97beee2b4391bde559caaa0d0b339f6d",
+        "participantId": "host-1793969598571",
+        "name": "Host Admin",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793969598571-1491bd6b",
+        "joinedAt": 1793969598571,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      },
+      "2986148903efe22e104aff6f6d217139807c83b8bed0477e9e52ccc425b75c53": {
+        "token": "2986148903efe22e104aff6f6d217139807c83b8bed0477e9e52ccc425b75c53",
+        "participantId": "viewer-1793969598573-c5bb80",
+        "name": "UserA",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969598573-c5bb80",
+        "isHost": false,
+        "roomId": "room-1793969598571-1491bd6b",
+        "joinedAt": 1793969598573,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      },
+      "f9a86ead49fcca2c9aaeee35ee30866eeafcd9a8ef63d59cbbe7257d4056d4ca": {
+        "token": "f9a86ead49fcca2c9aaeee35ee30866eeafcd9a8ef63d59cbbe7257d4056d4ca",
+        "participantId": "viewer-1793969598576-4de856",
+        "name": "UserB",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969598576-4de856",
+        "isHost": false,
+        "roomId": "room-1793969598571-1491bd6b",
+        "joinedAt": 1793969598576,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      }
+    },
+    "lastActivity": 1793969598580
+  },
+  {
+    "room": {
+      "id": "room-1793969598585-8ceff480",
+      "title": "Sanitization Test Room",
+      "roomCode": "SW2YJC",
+      "hostId": "host-1793969598585",
+      "hostName": "Host1",
+      "sourceVideo": {
+        "id": "src-security",
+        "title": "Security Analysis Video",
+        "creator": "SyncView Security Team",
+        "duration": 200,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80",
+        "category": "Tech",
+        "description": "Test fixture for security verification"
+      },
+      "primaryReaction": {
+        "id": "rx-security",
+        "sourceId": "src-security",
+        "creator": "Alice Host",
+        "channelName": "Alice Security",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "title": "Alice Tests SyncView Security",
+        "duration": 220,
+        "introDuration": 10,
+        "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "thumbnail": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        "anchors": [
+          {
+            "id": "a1",
+            "sourceTime": 0,
+            "reactionTime": 10,
+            "type": "intro"
+          }
+        ],
+        "chapters": [],
+        "highlights": [],
+        "notes": [
+          {
+            "id": "note-1793969598592-a9217b",
+            "userId": "viewer-1793969598587-435add",
+            "userName": "Tester",
+            "sourceTimestamp": 10,
+            "reactionTimestamp": 20,
+            "text": "&lt;script&gt;alert(&quot;pwned&quot;)&lt;&#x2F;script&gt;&lt;img src=x onerror=alert(1)&gt;",
+            "isPublic": true,
+            "createdAt": 1793969598592
+          }
+        ],
+        "views": 5000,
+        "likes": 400,
+        "isPublished": true,
+        "createdAt": 1793969598518
+      },
+      "additionalReactions": [],
+      "playbackState": {
+        "isPlaying": false,
+        "sourceTime": 0,
+        "playbackRate": 1,
+        "seq": 1,
+        "serverTimestamp": 1793969598585
+      },
+      "participants": [
+        {
+          "id": "host-1793969598585",
+          "name": "Host1",
+          "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "isHost": true,
+          "joinedAt": 1793969598585,
+          "status": "watching"
+        },
+        {
+          "id": "viewer-1793969598587-435add",
+          "name": "Tester",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969598587-435add",
+          "isHost": false,
+          "joinedAt": 1793969598587,
+          "status": "watching"
+        }
+      ],
+      "chatMessages": [
+        {
+          "id": "msg-1793969598585",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "🎉 Watch party created! Share code: SW2YJC",
+          "timestamp": 1793969598585,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793969598587",
+          "senderId": "system",
+          "senderName": "SyncView Bot",
+          "avatar": "",
+          "text": "Tester joined the party.",
+          "timestamp": 1793969598587,
+          "isHost": false
+        },
+        {
+          "id": "msg-1793969598590-2b58",
+          "senderId": "viewer-1793969598587-435add",
+          "senderName": "Tester",
+          "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969598587-435add",
+          "text": "&lt;script&gt;alert(&quot;pwned&quot;)&lt;&#x2F;script&gt;&lt;img src=x onerror=alert(1)&gt;",
+          "timestamp": 1793969598590,
+          "isHost": false
+        }
+      ],
+      "notes": [
+        {
+          "id": "note-1793969598592-a9217b",
+          "userId": "viewer-1793969598587-435add",
+          "userName": "Tester",
+          "sourceTimestamp": 10,
+          "reactionTimestamp": 20,
+          "text": "&lt;script&gt;alert(&quot;pwned&quot;)&lt;&#x2F;script&gt;&lt;img src=x onerror=alert(1)&gt;",
+          "isPublic": true,
+          "createdAt": 1793969598592
+        }
+      ],
+      "isLocked": false,
+      "createdAt": 1793969598585
+    },
+    "hostToken": "3cde5d447961cbaee132dc806c79f2a3b9d10e6dd96dd95a90d300a4b0c1b1ee",
+    "sessions": {
+      "7950a0240dd164105aa23f45612152d3c8bbf938b8e1e478554231179cdf2bbb": {
+        "token": "7950a0240dd164105aa23f45612152d3c8bbf938b8e1e478554231179cdf2bbb",
+        "participantId": "host-1793969598585",
+        "name": "Host1",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "isHost": true,
+        "roomId": "room-1793969598585-8ceff480",
+        "joinedAt": 1793969598585,
+        "lastMessageTime": 0,
+        "messageWindowCount": 0
+      },
+      "af026b47dd7f460f5ad2d7b008657f34c3712d69b6b92012b6ac7e0d43e69d5d": {
+        "token": "af026b47dd7f460f5ad2d7b008657f34c3712d69b6b92012b6ac7e0d43e69d5d",
+        "participantId": "viewer-1793969598587-435add",
+        "name": "Tester",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=viewer-1793969598587-435add",
+        "isHost": false,
+        "roomId": "room-1793969598585-8ceff480",
+        "joinedAt": 1793969598587,
+        "lastMessageTime": 1793969598590,
+        "messageWindowCount": 1
+      }
+    },
+    "lastActivity": 1793969598592
   }
 ]

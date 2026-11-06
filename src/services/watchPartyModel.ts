@@ -22,6 +22,17 @@ export interface PlaybackCommand {
   expectedSeq?: number;
 }
 
+export function escapeHtml(str: string): string {
+  if (typeof str !== 'string') return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;');
+}
+
 export class WatchPartyManager {
   private repository: IWatchPartyRepository;
   private readonly roomTtlMs = 1000 * 60 * 60 * 24; // 24 hours
@@ -250,6 +261,11 @@ export class WatchPartyManager {
     const now = Date.now();
     const current = data.room.playbackState;
 
+    const VALID_COMMANDS = new Set(['play', 'pause', 'seek', 'rate', 'change_media']);
+    if (!VALID_COMMANDS.has(cmd.command)) {
+      return { success: false, error: `Invalid playback command type: ${cmd.command}` };
+    }
+
     let newIsPlaying = current.isPlaying;
     let newSourceTime = current.sourceTime;
     let newRate = current.playbackRate;
@@ -257,25 +273,27 @@ export class WatchPartyManager {
     switch (cmd.command) {
       case 'play':
         newIsPlaying = true;
-        if (typeof cmd.sourceTime === 'number' && cmd.sourceTime >= 0) {
-          newSourceTime = cmd.sourceTime;
+        if (typeof cmd.sourceTime === 'number' && Number.isFinite(cmd.sourceTime) && cmd.sourceTime >= 0) {
+          newSourceTime = Math.min(86400, cmd.sourceTime);
         }
         break;
       case 'pause':
         newIsPlaying = false;
-        if (typeof cmd.sourceTime === 'number' && cmd.sourceTime >= 0) {
-          newSourceTime = cmd.sourceTime;
+        if (typeof cmd.sourceTime === 'number' && Number.isFinite(cmd.sourceTime) && cmd.sourceTime >= 0) {
+          newSourceTime = Math.min(86400, cmd.sourceTime);
         }
         break;
       case 'seek':
-        if (typeof cmd.sourceTime === 'number' && cmd.sourceTime >= 0) {
-          newSourceTime = cmd.sourceTime;
+        if (typeof cmd.sourceTime !== 'number' || !Number.isFinite(cmd.sourceTime) || cmd.sourceTime < 0 || cmd.sourceTime > 86400) {
+          return { success: false, error: 'Invalid seek timestamp: must be finite number between 0 and 86400' };
         }
+        newSourceTime = cmd.sourceTime;
         break;
       case 'rate':
-        if (cmd.playbackRate && cmd.playbackRate >= 0.25 && cmd.playbackRate <= 2.5) {
-          newRate = cmd.playbackRate;
+        if (typeof cmd.playbackRate !== 'number' || !Number.isFinite(cmd.playbackRate) || cmd.playbackRate < 0.25 || cmd.playbackRate > 3.0) {
+          return { success: false, error: 'Invalid playback rate: must be between 0.25 and 3.0' };
         }
+        newRate = cmd.playbackRate;
         break;
     }
 
@@ -315,10 +333,11 @@ export class WatchPartyManager {
       return { success: false, error: 'Unauthorized: valid participant session required to post messages' };
     }
 
-    const cleanText = (text || '').trim().slice(0, 500);
-    if (!cleanText) {
+    const rawText = typeof text === 'string' ? text.trim() : '';
+    if (!rawText) {
       return { success: false, error: 'Message cannot be empty' };
     }
+    const cleanText = escapeHtml(rawText.slice(0, 500));
 
     const now = Date.now();
 
@@ -380,9 +399,18 @@ export class WatchPartyManager {
       return { success: false, error: 'Room note limit reached (maximum 100 notes per room)' };
     }
 
-    const cleanText = (text || '').trim().slice(0, 280);
-    if (!cleanText) {
+    const rawText = typeof text === 'string' ? text.trim() : '';
+    if (!rawText) {
       return { success: false, error: 'Note text cannot be empty' };
+    }
+    const cleanText = escapeHtml(rawText.slice(0, 280));
+
+    // Validate timestamps
+    if (typeof sourceTime !== 'number' || !Number.isFinite(sourceTime) || sourceTime < 0 || sourceTime > 86400) {
+      return { success: false, error: 'Invalid source timestamp: must be finite number between 0 and 86400' };
+    }
+    if (typeof reactionTime !== 'number' || !Number.isFinite(reactionTime) || reactionTime < 0 || reactionTime > 86400) {
+      return { success: false, error: 'Invalid reaction timestamp: must be finite number between 0 and 86400' };
     }
 
     const now = Date.now();
@@ -482,12 +510,18 @@ export class WatchPartyManager {
     return playbackState.sourceTime + elapsedSeconds * playbackState.playbackRate;
   }
 
-  private async findRoomData(idOrCode: string): Promise<StoredRoomData | null> {
+  public async findRoomData(idOrCode: string): Promise<StoredRoomData | null> {
     let data = await this.repository.getRoomById(idOrCode);
     if (!data) {
       data = await this.repository.getRoomByCode(idOrCode);
     }
     return data;
+  }
+
+  public async getParticipantSession(idOrCode: string, token: string): Promise<ParticipantSession | null> {
+    const data = await this.findRoomData(idOrCode);
+    if (!data || !token) return null;
+    return data.sessions[token] || null;
   }
 
   private sanitizeRoom(room: WatchParty): WatchParty {

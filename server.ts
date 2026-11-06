@@ -9,6 +9,19 @@ import { fileURLToPath } from 'url';
 import { WatchPartyManager } from './src/services/watchPartyModel';
 import { SAMPLE_SOURCES, SAMPLE_REACTIONS } from './src/data/mockCatalogue';
 import { exportAnchorsToCsv, importAnchorsFromCsv } from './src/services/syncEngine';
+import {
+  authenticateUser,
+  createRequireRoomMembership,
+  createRequireHostAuth,
+  validateRoomParam,
+  extractHostToken,
+  extractParticipantToken,
+  serverAuthProvider,
+  isValidTimestamp,
+  isValidPlaybackRate,
+  isValidCommandType,
+  sanitizeHtml,
+} from './src/server/authMiddleware';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,41 +29,14 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = parseInt(process.env.PORT || '3000', 10);
 
-app.use(express.json());
+// Enforce request payload size limit (max 64kb) to protect against DoS
+app.use(express.json({ limit: '64kb' }));
 
 // Global instance of the authoritative watch party manager
 const partyManager = new WatchPartyManager();
 
-// Helper to extract host token from headers or body
-function extractHostToken(req: Request): string {
-  const hostHeader = req.headers['x-host-token'];
-  if (typeof hostHeader === 'string' && hostHeader.trim()) {
-    return hostHeader.trim();
-  }
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    return authHeader.substring(7).trim();
-  }
-  return (req.body?.hostToken || req.query?.hostToken || '').toString().trim();
-}
-
-// Helper to extract participant session token from headers or query/body
-function extractParticipantToken(req: Request): string {
-  const pHeader = req.headers['x-participant-token'];
-  if (typeof pHeader === 'string' && pHeader.trim()) {
-    return pHeader.trim();
-  }
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    return authHeader.substring(7).trim();
-  }
-  return (
-    req.body?.participantToken ||
-    req.body?.existingToken ||
-    req.query?.participantToken ||
-    ''
-  ).toString().trim();
-}
+// Middleware: Extract & attach authenticated user context if present
+app.use(authenticateUser);
 
 // ==========================================
 // API Routes
@@ -58,7 +44,24 @@ function extractParticipantToken(req: Request): string {
 
 // Health check
 app.get('/api/health', (_req: Request, res: Response) => {
-  res.json({ status: 'healthy', platform: 'SyncView', timestamp: Date.now() });
+  res.json({
+    status: 'healthy',
+    platform: 'SyncView',
+    authProvider: serverAuthProvider.name,
+    isProductionAuth: serverAuthProvider.isProductionReady,
+    timestamp: Date.now(),
+  });
+});
+
+// Auth provider status & missing production configuration disclosure
+app.get('/api/auth/status', (_req: Request, res: Response) => {
+  res.json({
+    providerId: serverAuthProvider.id,
+    providerName: serverAuthProvider.name,
+    isProductionReady: serverAuthProvider.isProductionReady,
+    missingConfiguration: serverAuthProvider.getMissingProductionConfig(),
+    documentation: 'To deploy to live users, configure Firebase Auth (verifyIdToken) or Google OAuth.',
+  });
 });
 
 // Download full source code as zip
@@ -90,7 +93,6 @@ app.get('/api/catalogue/reactions', (req: Request, res: Response) => {
 // Browse active watch parties
 app.get('/api/parties', async (_req: Request, res: Response) => {
   try {
-    // Return sample active party or registered active rooms
     const activeDemo = await partyManager.getRoom('room-featured-demo');
     if (activeDemo) {
       return res.json([activeDemo]);
@@ -104,7 +106,18 @@ app.get('/api/parties', async (_req: Request, res: Response) => {
 // Create a new room
 app.post('/api/parties', async (req: Request, res: Response) => {
   try {
-    const { title, hostName, sourceId, reactionId } = req.body;
+    const { title, sourceId, reactionId } = req.body;
+
+    // Derive host name from authenticated session if logged in; otherwise sanitize input or default
+    const hostName = req.user
+      ? req.user.name
+      : typeof req.body.hostName === 'string'
+      ? sanitizeHtml(req.body.hostName.trim().slice(0, 30))
+      : 'Host';
+
+    const cleanTitle = typeof title === 'string' && title.trim()
+      ? sanitizeHtml(title.trim().slice(0, 80))
+      : undefined;
 
     const source = SAMPLE_SOURCES.find((s) => s.id === sourceId) || SAMPLE_SOURCES[0];
     const primaryReaction = SAMPLE_REACTIONS.find((r) => r.id === reactionId) || SAMPLE_REACTIONS[0];
@@ -113,14 +126,14 @@ app.post('/api/parties', async (req: Request, res: Response) => {
     ).slice(0, 4);
 
     const { room, hostToken, participantToken } = await partyManager.createRoom({
-      title: title || `${primaryReaction.creator}'s Watch Party`,
-      hostName: hostName || 'Host',
+      title: cleanTitle || `${primaryReaction.creator}'s Watch Party`,
+      hostName,
       sourceVideo: source,
       primaryReaction,
       additionalReactions: additional,
     });
 
-    // Return room, hostToken, and host's participantToken
+    // Return room and private credentials (ONLY on initial creation)
     res.status(201).json({
       room,
       hostToken,
@@ -132,8 +145,8 @@ app.post('/api/parties', async (req: Request, res: Response) => {
   }
 });
 
-// Get room details by ID or 6-digit Code (safe view - hostToken NEVER exposed)
-app.get('/api/parties/:id', async (req: Request, res: Response) => {
+// Get room details by ID or 6-digit Code (Safe view - hostToken NEVER exposed)
+app.get('/api/parties/:id', validateRoomParam, async (req: Request, res: Response) => {
   try {
     const room = await partyManager.getRoom(req.params.id);
     if (!room) {
@@ -150,21 +163,30 @@ app.get('/api/parties/:id', async (req: Request, res: Response) => {
   }
 });
 
-// Join room as viewer (supports reconnect via participantToken / existingToken)
-app.post('/api/parties/:id/join', async (req: Request, res: Response) => {
+// Join room as viewer (supports reconnect via participantToken header)
+app.post('/api/parties/:id/join', validateRoomParam, async (req: Request, res: Response) => {
   try {
-    const { participantName } = req.body;
+    // Derive name from verified user if authenticated, otherwise sanitize guest name
+    let participantName = 'Guest Viewer';
+    if (req.user) {
+      participantName = req.user.name;
+    } else if (typeof req.body?.participantName === 'string' && req.body.participantName.trim()) {
+      participantName = sanitizeHtml(req.body.participantName.trim().slice(0, 30));
+    }
+
+    // Extract existing token strictly from headers (never query string!)
     const existingToken = extractParticipantToken(req);
 
     const result = await partyManager.joinRoom(
       req.params.id,
-      participantName || 'Guest Viewer',
+      participantName,
       existingToken || undefined
     );
 
     if (!result) {
       return res.status(404).json({ error: 'Watch party not found' });
     }
+
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: 'Error joining watch party' });
@@ -172,134 +194,185 @@ app.post('/api/parties/:id/join', async (req: Request, res: Response) => {
 });
 
 // Execute authoritative host playback command (Host ONLY)
-app.post('/api/parties/:id/command', async (req: Request, res: Response) => {
-  try {
-    const token = extractHostToken(req);
-    if (!token) {
-      return res.status(401).json({ error: 'Host authorization token is required' });
-    }
+app.post(
+  '/api/parties/:id/command',
+  createRequireHostAuth(partyManager),
+  async (req: Request, res: Response) => {
+    try {
+      const token = extractHostToken(req);
+      const { command, sourceTime, playbackRate } = req.body;
 
-    const { command, sourceTime, playbackRate } = req.body;
-    const result = await partyManager.executeHostCommand(req.params.id, token, {
-      command,
-      sourceTime,
-      playbackRate,
-    });
+      if (!isValidCommandType(command)) {
+        return res.status(400).json({ error: `Invalid command type: ${command}` });
+      }
 
-    if (!result.success) {
-      return res.status(403).json({ error: result.error });
-    }
+      if (sourceTime !== undefined && !isValidTimestamp(sourceTime)) {
+        return res.status(400).json({ error: 'Invalid source timestamp: must be finite number >= 0' });
+      }
 
-    res.json({ success: true, playbackState: result.state });
-  } catch (err) {
-    res.status(500).json({ error: 'Error executing playback command' });
-  }
-});
+      if (playbackRate !== undefined && !isValidPlaybackRate(playbackRate)) {
+        return res.status(400).json({ error: 'Invalid playback rate: must be between 0.25 and 3.0' });
+      }
 
-// Send chat message (Sender identity derived strictly from server participant session)
-app.post('/api/parties/:id/chat', async (req: Request, res: Response) => {
-  try {
-    const participantToken = extractParticipantToken(req);
-    if (!participantToken) {
-      return res.status(401).json({
-        error: 'Unauthorized: valid participant session token required to send chat messages',
+      const result = await partyManager.executeHostCommand(req.params.id, token, {
+        command,
+        sourceTime,
+        playbackRate,
       });
+
+      if (!result.success) {
+        return res.status(403).json({ error: result.error });
+      }
+
+      res.json({ success: true, playbackState: result.state });
+    } catch (err) {
+      res.status(500).json({ error: 'Error executing playback command' });
     }
-
-    const { text } = req.body;
-    const result = await partyManager.addChatMessage(
-      req.params.id,
-      participantToken,
-      text || ''
-    );
-
-    if (!result.success) {
-      return res.status(400).json({ error: result.error });
-    }
-
-    res.status(201).json(result.message);
-  } catch (err) {
-    res.status(500).json({ error: 'Error sending chat message' });
   }
-});
+);
 
-// Add timestamped note (Ownership derived strictly from server participant session)
-app.post('/api/parties/:id/notes', async (req: Request, res: Response) => {
-  try {
-    const participantToken = extractParticipantToken(req);
-    if (!participantToken) {
-      return res.status(401).json({
-        error: 'Unauthorized: valid participant session token required to record notes',
-      });
+// Send chat message (Sender identity derived strictly from verified room membership session)
+app.post(
+  '/api/parties/:id/chat',
+  createRequireRoomMembership(partyManager),
+  async (req: Request, res: Response) => {
+    try {
+      const session = req.participantSession!;
+      const { text } = req.body;
+
+      if (typeof text !== 'string' || !text.trim()) {
+        return res.status(400).json({ error: 'Message text cannot be empty' });
+      }
+
+      if (text.trim().length > 500) {
+        return res.status(400).json({ error: 'Message exceeds maximum length of 500 characters' });
+      }
+
+      // Sender identity and display name are derived entirely by the server session!
+      // Client-supplied senderId, senderName, and isHost are REJECTED and ignored.
+      const result = await partyManager.addChatMessage(
+        req.params.id,
+        session.token,
+        text
+      );
+
+      if (!result.success) {
+        return res.status(400).json({ error: result.error });
+      }
+
+      res.status(201).json(result.message);
+    } catch (err) {
+      res.status(500).json({ error: 'Error sending chat message' });
     }
-
-    const { sourceTime, reactionTime, text } = req.body;
-    const result = await partyManager.addNote(
-      req.params.id,
-      participantToken,
-      parseFloat(sourceTime) || 0,
-      parseFloat(reactionTime) || 0,
-      text || ''
-    );
-
-    if (!result.success) {
-      return res.status(400).json({ error: result.error });
-    }
-
-    res.status(201).json(result.note);
-  } catch (err) {
-    res.status(500).json({ error: 'Error adding note' });
   }
-});
+);
 
-// Delete note (owner or host only)
-app.delete('/api/parties/:id/notes/:noteId', async (req: Request, res: Response) => {
-  try {
-    const hostToken = extractHostToken(req);
-    const participantToken = extractParticipantToken(req);
+// Add timestamped note (Ownership derived strictly from verified room membership session)
+app.post(
+  '/api/parties/:id/notes',
+  createRequireRoomMembership(partyManager),
+  async (req: Request, res: Response) => {
+    try {
+      const session = req.participantSession!;
+      const { sourceTime, reactionTime, text } = req.body;
 
-    const result = await partyManager.deleteNote(
-      req.params.id,
-      req.params.noteId,
-      participantToken || undefined,
-      hostToken || undefined
-    );
+      if (typeof text !== 'string' || !text.trim()) {
+        return res.status(400).json({ error: 'Note text cannot be empty' });
+      }
 
-    if (!result.success) {
-      return res.status(403).json({ error: result.error });
+      if (text.trim().length > 280) {
+        return res.status(400).json({ error: 'Note exceeds maximum length of 280 characters' });
+      }
+
+      const parsedSourceTime = parseFloat(sourceTime);
+      const parsedReactionTime = parseFloat(reactionTime);
+
+      if (!isValidTimestamp(parsedSourceTime) || !isValidTimestamp(parsedReactionTime)) {
+        return res.status(400).json({ error: 'Invalid timestamps: must be finite non-negative numbers' });
+      }
+
+      // Note ownership and author name are derived entirely from server session!
+      const result = await partyManager.addNote(
+        req.params.id,
+        session.token,
+        parsedSourceTime,
+        parsedReactionTime,
+        text
+      );
+
+      if (!result.success) {
+        return res.status(400).json({ error: result.error });
+      }
+
+      res.status(201).json(result.note);
+    } catch (err) {
+      res.status(500).json({ error: 'Error adding note' });
     }
-
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Error deleting note' });
   }
-});
+);
 
-// Reassign host
-app.post('/api/parties/:id/reassign-host', async (req: Request, res: Response) => {
-  try {
-    const currentHostToken = extractHostToken(req);
-    const { targetParticipantId } = req.body;
+// Delete note (Restricted strictly to the actual note author or room host)
+app.delete(
+  '/api/parties/:id/notes/:noteId',
+  validateRoomParam,
+  async (req: Request, res: Response) => {
+    try {
+      const hostToken = extractHostToken(req);
+      const participantToken = extractParticipantToken(req);
 
-    if (!currentHostToken) {
-      return res.status(401).json({ error: 'Current host token is required' });
+      if (!hostToken && !participantToken) {
+        return res.status(401).json({
+          error: 'Unauthorized: note author session token or host credentials required to delete a note',
+        });
+      }
+
+      const result = await partyManager.deleteNote(
+        req.params.id,
+        req.params.noteId,
+        participantToken || undefined,
+        hostToken || undefined
+      );
+
+      if (!result.success) {
+        return res.status(403).json({ error: result.error });
+      }
+
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Error deleting note' });
     }
-
-    const result = await partyManager.reassignHost(
-      req.params.id,
-      currentHostToken,
-      targetParticipantId
-    );
-
-    if (!result.success) {
-      return res.status(403).json({ error: result.error });
-    }
-
-    res.json({ success: true, newHostToken: result.newHostToken });
-  } catch (err) {
-    res.status(500).json({ error: 'Error reassigning host' });
   }
-});
+);
+
+// Reassign host (Host ONLY)
+app.post(
+  '/api/parties/:id/reassign-host',
+  createRequireHostAuth(partyManager),
+  async (req: Request, res: Response) => {
+    try {
+      const currentHostToken = extractHostToken(req);
+      const { targetParticipantId } = req.body;
+
+      if (typeof targetParticipantId !== 'string' || !targetParticipantId.trim()) {
+        return res.status(400).json({ error: 'Target participant ID is required' });
+      }
+
+      const result = await partyManager.reassignHost(
+        req.params.id,
+        currentHostToken,
+        targetParticipantId.trim()
+      );
+
+      if (!result.success) {
+        return res.status(403).json({ error: result.error });
+      }
+
+      res.json({ success: true, newHostToken: result.newHostToken });
+    } catch (err) {
+      res.status(500).json({ error: 'Error reassigning host' });
+    }
+  }
+);
 
 // CSV tools for Creator Studio
 app.post('/api/reactions/export-csv', (req: Request, res: Response) => {
