@@ -97,23 +97,25 @@ export function Navigation({
             <>
               <button
                 onClick={() => onSelectViewerTab('home')}
-                className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${
                   viewerTab === 'home'
                     ? 'text-white bg-slate-900 border border-slate-800 font-semibold'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                Home
+                <Tv className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Viewing Canvas</span>
               </button>
               <button
-                onClick={() => onSelectViewerTab('explore')}
-                className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-                  viewerTab === 'explore'
+                onClick={() => onSelectViewerTab('library')}
+                className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${
+                  viewerTab === 'library'
                     ? 'text-white bg-slate-900 border border-slate-800 font-semibold'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                Explore
+                <Bookmark className="w-3.5 h-3.5 text-slate-400" />
+                <span>My Streams</span>
               </button>
               <button
                 onClick={() => onSelectViewerTab('parties')}
@@ -125,16 +127,6 @@ export function Navigation({
               >
                 <Users className="w-3.5 h-3.5 text-purple-400" />
                 <span>Watch Parties</span>
-              </button>
-              <button
-                onClick={() => onSelectViewerTab('library')}
-                className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-                  viewerTab === 'library'
-                    ? 'text-white bg-slate-900 border border-slate-800 font-semibold'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                Library
               </button>
             </>
           ) : (

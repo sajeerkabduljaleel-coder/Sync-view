@@ -139,21 +139,34 @@ test('security: host tokens and session secrets are never exposed in public room
   assert.equal((publicRoom as any).hostToken, undefined);
 });
 
-test('security: query parameter token extraction is completely rejected', () => {
-  // Query parameter token attempt
+test('security: credentials supplied in request bodies or query strings are rejected', () => {
+  // 1. Request body token attempt (MUST BE REJECTED)
+  const mockReqWithBody: any = {
+    headers: {},
+    query: {},
+    body: { hostToken: 'leaked-in-body', participantToken: 'body-participant-token' },
+  };
+
+  const extractedHostFromBody = extractHostToken(mockReqWithBody);
+  assert.equal(extractedHostFromBody, '', 'Request body hostToken MUST be rejected');
+
+  const extractedParticipantFromBody = extractParticipantToken(mockReqWithBody);
+  assert.equal(extractedParticipantFromBody, '', 'Request body participantToken MUST be rejected');
+
+  // 2. Query parameter token attempt (MUST BE REJECTED)
   const mockReqWithQuery: any = {
     headers: {},
     query: { hostToken: 'leaked-in-query-string', participantToken: 'query-participant-token' },
     body: {},
   };
 
-  const extractedHost = extractHostToken(mockReqWithQuery);
-  assert.equal(extractedHost, '', 'Query string host secrets MUST be rejected');
+  const extractedHostFromQuery = extractHostToken(mockReqWithQuery);
+  assert.equal(extractedHostFromQuery, '', 'Query string host secrets MUST be rejected');
 
-  const extractedParticipant = extractParticipantToken(mockReqWithQuery);
-  assert.equal(extractedParticipant, '', 'Query string participant tokens MUST be rejected');
+  const extractedParticipantFromQuery = extractParticipantToken(mockReqWithQuery);
+  assert.equal(extractedParticipantFromQuery, '', 'Query string participant tokens MUST be rejected');
 
-  // Header tokens are properly accepted
+  // 3. Custom Header tokens are properly accepted
   const mockReqWithHeader: any = {
     headers: {
       'x-host-token': 'valid-host-secret-12345',
@@ -164,6 +177,45 @@ test('security: query parameter token extraction is completely rejected', () => 
   };
   assert.equal(extractHostToken(mockReqWithHeader), 'valid-host-secret-12345');
   assert.equal(extractParticipantToken(mockReqWithHeader), 'valid-participant-token-67890');
+
+  // 4. Authorization: Bearer header is properly accepted
+  const mockReqWithBearer: any = {
+    headers: {
+      authorization: 'Bearer valid-bearer-token-abcde',
+    },
+    query: {},
+    body: {},
+  };
+  assert.equal(extractHostToken(mockReqWithBearer), 'valid-bearer-token-abcde');
+  assert.equal(extractParticipantToken(mockReqWithBearer), 'valid-bearer-token-abcde');
+});
+
+test('security: room takeover attempts via host reassignment without host credentials are blocked', async () => {
+  const manager = new WatchPartyManager();
+  const { room, hostToken } = await manager.createRoom({
+    title: 'Takeover Prevention Room',
+    hostName: 'Legit Host',
+    sourceVideo: testSource,
+    primaryReaction: testReaction,
+  });
+
+  const attackerJoin = await manager.joinRoom(room.id, 'Attacker');
+  assert.ok(attackerJoin);
+
+  // Attacker attempts to hijack room using their own participantToken as hostToken
+  const hijackAttempt1 = await manager.reassignHost(room.id, attackerJoin.participantToken, attackerJoin.participantId);
+  assert.equal(hijackAttempt1.success, false);
+  assert.match(hijackAttempt1.error || '', /Unauthorized/);
+
+  // Attacker attempts with empty / fake host token
+  const hijackAttempt2 = await manager.reassignHost(room.id, 'invalid-fake-host-token', attackerJoin.participantId);
+  assert.equal(hijackAttempt2.success, false);
+  assert.match(hijackAttempt2.error || '', /Unauthorized/);
+
+  // Legit host CAN reassign host
+  const legitimateReassign = await manager.reassignHost(room.id, hostToken, attackerJoin.participantId);
+  assert.equal(legitimateReassign.success, true);
+  assert.ok(legitimateReassign.newHostToken);
 });
 
 test('security: unauthorized host commands are blocked and require constant-time match', async () => {

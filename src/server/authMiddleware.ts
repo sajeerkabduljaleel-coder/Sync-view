@@ -14,6 +14,7 @@ declare global {
     interface Request {
       user?: AuthenticatedUser;
       participantSession?: ParticipantSession;
+      rawParticipantToken?: string;
       isHost?: boolean;
     }
   }
@@ -110,11 +111,12 @@ export function isValidPlaybackRate(val: unknown): boolean {
 }
 
 // ==========================================
-// Token Extraction (No secrets in query params!)
+// Token Extraction (Strict Headers Only)
+// Credentials in request body or URL query strings are REJECTED.
 // ==========================================
 
 export function extractHostToken(req: Request): string {
-  // Only accept from secure authorization headers
+  // Only accept from dedicated headers
   const hostHeader = req.headers['x-host-token'];
   if (typeof hostHeader === 'string' && hostHeader.trim()) {
     return hostHeader.trim();
@@ -123,10 +125,7 @@ export function extractHostToken(req: Request): string {
   if (authHeader && authHeader.startsWith('Bearer ')) {
     return authHeader.substring(7).trim();
   }
-  // Optional body fallback for POST requests (never query string!)
-  if (req.body?.hostToken && typeof req.body.hostToken === 'string') {
-    return req.body.hostToken.trim();
-  }
+  // Request body and query string fallbacks are explicitly prohibited
   return '';
 }
 
@@ -139,9 +138,7 @@ export function extractParticipantToken(req: Request): string {
   if (authHeader && authHeader.startsWith('Bearer ')) {
     return authHeader.substring(7).trim();
   }
-  if (req.body?.participantToken && typeof req.body.participantToken === 'string') {
-    return req.body.participantToken.trim();
-  }
+  // Request body and query string fallbacks are explicitly prohibited
   return '';
 }
 
@@ -192,16 +189,11 @@ export function createRequireRoomMembership(partyManager: WatchPartyManager) {
     const token = extractParticipantToken(req);
     if (!token) {
       return res.status(401).json({
-        error: 'Unauthorized: valid participant session token required (pass via x-participant-token or Authorization: Bearer)',
+        error: 'Unauthorized: valid participant session token required in x-participant-token or Authorization: Bearer header',
       });
     }
 
-    const roomData = await (partyManager as any).findRoomData(roomId);
-    if (!roomData) {
-      return res.status(404).json({ error: 'Watch party room not found' });
-    }
-
-    const session = roomData.sessions[token];
+    const session = await partyManager.getParticipantSession(roomId, token);
     if (!session) {
       return res.status(403).json({
         error: 'Forbidden: not a verified member of this watch party room',
@@ -209,6 +201,7 @@ export function createRequireRoomMembership(partyManager: WatchPartyManager) {
     }
 
     req.participantSession = session;
+    req.rawParticipantToken = token;
     next();
   };
 }
@@ -226,7 +219,7 @@ export function createRequireHostAuth(partyManager: WatchPartyManager) {
     const token = extractHostToken(req);
     if (!token) {
       return res.status(401).json({
-        error: 'Host authorization token required (pass via x-host-token or Authorization: Bearer)',
+        error: 'Host authorization token required in x-host-token or Authorization: Bearer header',
       });
     }
 

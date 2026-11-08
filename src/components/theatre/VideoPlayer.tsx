@@ -14,6 +14,7 @@ interface VideoPlayerProps {
   avatar?: string;
   isSource?: boolean;
   isPrimary?: boolean;
+  isLocalFile?: boolean;
   hasAudio?: boolean;
   isMuted?: boolean;
   volume?: number;
@@ -41,6 +42,7 @@ export const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(function
     avatar,
     isSource = false,
     isPrimary = false,
+    isLocalFile = false,
     hasAudio = true,
     isMuted = false,
     volume = 1.0,
@@ -61,6 +63,10 @@ export const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(function
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(180);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [src]);
 
   useImperativeHandle(ref, () => ({
     getElement: () => videoRef.current,
@@ -238,6 +244,11 @@ export const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(function
             ) : (
               <span className="ml-1 text-[10px] font-medium bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded">
                 REACTOR
+              </span>
+            )}
+            {isLocalFile && (
+              <span className="ml-1 text-[9px] font-bold tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded">
+                LOCAL
               </span>
             )}
           </div>

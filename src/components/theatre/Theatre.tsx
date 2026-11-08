@@ -29,6 +29,13 @@ import {
   Send,
   Smile,
   ShieldCheck,
+  Tv,
+  Film,
+  X,
+  UploadCloud,
+  Folder,
+  FileVideo,
+  Globe,
 } from 'lucide-react';
 import {
   VideoSource,
@@ -42,11 +49,20 @@ import {
 import { SessionSyncController, SessionSyncState } from '../../services/SessionSyncController';
 import { VideoPlayer } from './VideoPlayer';
 import { ContextualHelp } from '../common/ContextualHelp';
-import { SAMPLE_REACTIONS } from '../../data/mockCatalogue';
+import { StreamChooserModal } from './StreamChooserModal';
+import { catalogueService } from '../../services/catalogueService';
+
+function formatBytes(bytes: number | null | undefined): string {
+  if (!bytes || bytes <= 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
+}
 
 interface TheatreProps {
-  sourceVideo: VideoSource;
-  primaryReaction: ReactionVideo;
+  sourceVideo?: VideoSource | null;
+  primaryReaction?: ReactionVideo | null;
   extraReactions?: ReactionVideo[];
   isHost?: boolean;
   roomCode?: string;
@@ -54,10 +70,16 @@ interface TheatreProps {
   participantToken?: string;
   onExit?: () => void;
   onOpenCreatorStudio?: (reaction: ReactionVideo) => void;
+  onStreamsChanged?: (config: {
+    source: VideoSource;
+    primaryReaction: ReactionVideo;
+    extraReactions: ReactionVideo[];
+  }) => void;
+  onJoinPartyByCode?: (code: string) => void;
 }
 
 export function Theatre({
-  sourceVideo,
+  sourceVideo: initialSourceVideo,
   primaryReaction: initialPrimaryReaction,
   extraReactions: initialExtraReactions = [],
   isHost = true,
@@ -66,36 +88,80 @@ export function Theatre({
   participantToken,
   onExit,
   onOpenCreatorStudio,
+  onStreamsChanged,
+  onJoinPartyByCode,
 }: TheatreProps) {
   // Sync controller instance (authoritative engine)
   const controllerRef = useRef<SessionSyncController | null>(null);
   const lastServerSeqRef = useRef<number>(0);
 
-  const [primaryReaction, setPrimaryReaction] = useState<ReactionVideo>(initialPrimaryReaction);
+  const [sourceVideo, setSourceVideo] = useState<VideoSource | null>(initialSourceVideo || null);
+  const [primaryReaction, setPrimaryReaction] = useState<ReactionVideo | null>(initialPrimaryReaction || null);
   const [extraReactions, setExtraReactions] = useState<ReactionVideo[]>(initialExtraReactions);
   const [syncState, setSyncState] = useState<SessionSyncState | null>(null);
+
+  // Stream Chooser & Blank Canvas State
+  const [isStreamChooserOpen, setIsStreamChooserOpen] = useState(false);
+  const [partyInputCode, setPartyInputCode] = useState('');
+  const [isPartyInputOpen, setIsPartyInputOpen] = useState(false);
+
+  // Quick stream inputs for blank canvas
+  const [quickSourceUrl, setQuickSourceUrl] = useState('');
+  const [quickReactionUrl, setQuickReactionUrl] = useState('');
+  const [quickReactorName, setQuickReactorName] = useState('');
+  const [quickIntroOffset, setQuickIntroOffset] = useState<number>(0);
+
+  // Local file state for original video on canvas
+  const [localSourceFile, setLocalSourceFile] = useState<File | null>(null);
+  const [localSourceUrl, setLocalSourceUrl] = useState<string>('');
+  const [localSourceDuration, setLocalSourceDuration] = useState<number | null>(null);
+  const [isDraggingCanvasSource, setIsDraggingCanvasSource] = useState(false);
+  const canvasFileInputRef = useRef<HTMLInputElement>(null);
+  const [quickSourceMode, setQuickSourceMode] = useState<'file' | 'url'>('file');
+
+  const handleSelectCanvasSourceFile = (file: File) => {
+    if (!file) return;
+    if (!file.type.startsWith('video/') && !file.name.match(/\.(mp4|webm|mkv|mov|m4v|avi)$/i)) {
+      return;
+    }
+    const blobUrl = URL.createObjectURL(file);
+    setLocalSourceFile(file);
+    setLocalSourceUrl(blobUrl);
+    setQuickSourceUrl(blobUrl);
+
+    try {
+      const tempVideo = document.createElement('video');
+      tempVideo.preload = 'metadata';
+      tempVideo.src = blobUrl;
+      tempVideo.onloadedmetadata = () => {
+        if (tempVideo.duration && !isNaN(tempVideo.duration)) {
+          setLocalSourceDuration(Math.round(tempVideo.duration));
+        }
+      };
+    } catch {}
+  };
 
   // Active side panel tab
   const [activeTab, setActiveTab] = useState<'chat' | 'chapters' | 'notes' | 'reactors'>('chapters');
 
   // Watch party chat & notes state
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    {
-      id: 'm1',
-      senderId: 'alex',
-      senderName: 'Alex Rivers',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80',
-      text: 'Synchronized with the trailer! Check out 0:45 when the portal opens 🔥',
-      timestamp: Date.now() - 60000,
-      isHost: true,
-    },
-  ]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [newChatText, setNewChatText] = useState('');
-  const [activeNotes, setActiveNotes] = useState<ReactionNote[]>(initialPrimaryReaction.notes || []);
+  const [activeNotes, setActiveNotes] = useState<ReactionNote[]>(initialPrimaryReaction?.notes || []);
   const [newNoteText, setNewNoteText] = useState('');
 
   // Floating emoji reaction bursts
   const [emojiBursts, setEmojiBursts] = useState<{ id: number; emoji: string; x: number }[]>([]);
+
+  // Sync state if props change from outside
+  useEffect(() => {
+    if (initialSourceVideo) setSourceVideo(initialSourceVideo);
+    if (initialPrimaryReaction) {
+      setPrimaryReaction(initialPrimaryReaction);
+      setActiveNotes(initialPrimaryReaction.notes || []);
+    }
+    if (initialExtraReactions) setExtraReactions(initialExtraReactions);
+  }, [initialSourceVideo, initialPrimaryReaction, initialExtraReactions]);
 
   // Watch Party live sync polling
   useEffect(() => {
@@ -142,17 +208,26 @@ export function Theatre({
     };
   }, [roomCode, isHost]);
 
-  // Initialize Controller
+  // Initialize Controller whenever source and primary reaction are available
   useEffect(() => {
+    if (!sourceVideo || !primaryReaction) {
+      if (controllerRef.current) {
+        controllerRef.current.destroy();
+        controllerRef.current = null;
+      }
+      setSyncState(null);
+      return;
+    }
+
     const controller = new SessionSyncController();
     controllerRef.current = controller;
 
     // Set initial reaction and anchors
     controller.setActiveReaction(primaryReaction.id);
-    controller.setReactionAnchors(primaryReaction.id, primaryReaction.anchors);
+    controller.setReactionAnchors(primaryReaction.id, primaryReaction.anchors || []);
 
     extraReactions.forEach((rx) => {
-      controller.setReactionAnchors(rx.id, rx.anchors);
+      controller.setReactionAnchors(rx.id, rx.anchors || []);
     });
 
     const unsubscribe = controller.subscribe((state) => {
@@ -163,15 +238,15 @@ export function Theatre({
       unsubscribe();
       controller.destroy();
     };
-  }, []);
+  }, [sourceVideo?.id, primaryReaction?.id]);
 
   // Update anchors when reactions change
   useEffect(() => {
-    if (controllerRef.current) {
+    if (controllerRef.current && primaryReaction) {
       controllerRef.current.setActiveReaction(primaryReaction.id);
-      controllerRef.current.setReactionAnchors(primaryReaction.id, primaryReaction.anchors);
+      controllerRef.current.setReactionAnchors(primaryReaction.id, primaryReaction.anchors || []);
       extraReactions.forEach((rx) => {
-        controllerRef.current?.setReactionAnchors(rx.id, rx.anchors);
+        controllerRef.current?.setReactionAnchors(rx.id, rx.anchors || []);
       });
     }
   }, [primaryReaction, extraReactions]);
@@ -230,7 +305,8 @@ export function Theatre({
 
   const handleAddExtraReactor = (rx: ReactionVideo) => {
     if (extraReactions.length >= 4) return;
-    if (rx.id === primaryReaction.id || extraReactions.some((e) => e.id === rx.id)) return;
+    if (primaryReaction && rx.id === primaryReaction.id) return;
+    if (extraReactions.some((e) => e.id === rx.id)) return;
     setExtraReactions((prev) => [...prev, rx]);
     controllerRef.current?.setReactionAnchors(rx.id, rx.anchors);
   };
@@ -244,7 +320,11 @@ export function Theatre({
     const oldPrimary = primaryReaction;
     const remainingExtras = extraReactions.filter((r) => r.id !== newPrimary.id);
     setPrimaryReaction(newPrimary);
-    setExtraReactions([oldPrimary, ...remainingExtras]);
+    if (oldPrimary) {
+      setExtraReactions([oldPrimary, ...remainingExtras]);
+    } else {
+      setExtraReactions(remainingExtras);
+    }
     controllerRef.current?.setActiveReaction(newPrimary.id);
   };
 
@@ -337,37 +417,516 @@ export function Theatre({
     setNewNoteText('');
   };
 
+  const handleDeleteNote = async (noteId: string) => {
+    if (roomCode) {
+      const headers: Record<string, string> = {};
+      if (hostToken) headers['x-host-token'] = hostToken;
+      if (participantToken) headers['x-participant-token'] = participantToken;
+      try {
+        const res = await fetch(`/api/parties/${roomCode}/notes/${noteId}`, {
+          method: 'DELETE',
+          headers,
+        });
+        if (res.ok) {
+          setActiveNotes((prev) => prev.filter((n) => n.id !== noteId));
+          return;
+        }
+      } catch {}
+    }
+    setActiveNotes((prev) => prev.filter((n) => n.id !== noteId));
+  };
+
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);
     const s = Math.floor(secs % 60);
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
+  // Launch streams handler
+  const handleLaunchChosenStreams = async (config: {
+    source: VideoSource;
+    primaryReaction: ReactionVideo;
+    extraReactions: ReactionVideo[];
+    layout?: TheatreLayout;
+    saveToLibrary?: boolean;
+  }) => {
+    setSourceVideo(config.source);
+    setPrimaryReaction(config.primaryReaction);
+    setExtraReactions(config.extraReactions);
+    setActiveNotes(config.primaryReaction.notes || []);
+
+    if (config.saveToLibrary) {
+      await catalogueService.saveStreamSetup({
+        source: config.source,
+        primaryReaction: config.primaryReaction,
+        extraReactions: config.extraReactions,
+        layout: config.layout,
+      });
+    }
+
+    if (config.layout && controllerRef.current) {
+      controllerRef.current.setLayout(config.layout);
+    }
+
+    if (onStreamsChanged) {
+      onStreamsChanged({
+        source: config.source,
+        primaryReaction: config.primaryReaction,
+        extraReactions: config.extraReactions,
+      });
+    }
+  };
+
+  const handleQuickLaunch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const effectiveSourceUrl =
+      quickSourceMode === 'file' ? (localSourceUrl || quickSourceUrl) : quickSourceUrl;
+
+    if (!effectiveSourceUrl.trim() || !quickReactionUrl.trim()) {
+      setIsStreamChooserOpen(true);
+      return;
+    }
+
+    const cleanReactor = quickReactorName.trim() || 'Primary Reactor';
+    const sourceId = `src-${Date.now()}`;
+    const reactionId = `rx-${Date.now()}`;
+    const now = Date.now();
+
+    const cleanSourceTitle = localSourceFile
+      ? localSourceFile.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ')
+      : 'Original Source Video';
+
+    const source: VideoSource = {
+      id: sourceId,
+      title: cleanSourceTitle,
+      creator: localSourceFile ? 'Local Media File' : 'Source Content Creator',
+      duration: localSourceDuration || 300,
+      url: effectiveSourceUrl.trim(),
+      thumbnail: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80',
+      category: 'Movies & TV',
+      description: localSourceFile ? `Local file: ${localSourceFile.name}` : 'Synchronized stream viewing session',
+      isLocalFile: Boolean(localSourceFile),
+      fileName: localSourceFile?.name,
+      fileSize: localSourceFile?.size,
+    };
+
+    const primaryRx: ReactionVideo = {
+      id: reactionId,
+      sourceId,
+      creator: cleanReactor,
+      channelName: `${cleanReactor} Live`,
+      avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanReactor}`,
+      title: `${cleanReactor} Reacts to ${cleanSourceTitle}`,
+      duration: 320,
+      introDuration: Math.max(0, Number(quickIntroOffset) || 0),
+      url: quickReactionUrl.trim(),
+      thumbnail: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80',
+      anchors: [
+        {
+          id: `a-${now}`,
+          sourceTime: 0,
+          reactionTime: Math.max(0, Number(quickIntroOffset) || 0),
+          type: 'intro',
+        },
+      ],
+      chapters: [],
+      highlights: [],
+      notes: [],
+      views: 1,
+      likes: 1,
+      isPublished: true,
+      createdAt: now,
+    };
+
+    handleLaunchChosenStreams({
+      source,
+      primaryReaction: primaryRx,
+      extraReactions: [],
+      saveToLibrary: !localSourceFile,
+    });
+  };
+
+  const handleQuickTestStreams = () => {
+    setQuickSourceMode('url');
+    setLocalSourceFile(null);
+    setLocalSourceUrl('');
+    setQuickSourceUrl('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4');
+    setQuickReactionUrl('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4');
+    setQuickReactorName('Alex Rivers');
+    setQuickIntroOffset(12.5);
+  };
+
+  // ========================================================
+  // 1. BLANK CANVAS VIEW (No generic placeholder videos)
+  // ========================================================
+  if (!sourceVideo || !primaryReaction) {
+    return (
+      <div className="relative min-h-screen bg-[#07090e] text-slate-100 flex flex-col font-sans select-none">
+        {/* Minimalist Top Canvas Bar */}
+        <header className="border-b border-slate-800/80 bg-slate-950/70 backdrop-blur-md px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-30">
+          <div className="flex items-center gap-3">
+            {onExit && (
+              <button
+                onClick={onExit}
+                className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <span>&larr; Exit Stage</span>
+              </button>
+            )}
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-md shadow-indigo-600/30">
+                <Tv className="w-4 h-4" />
+              </div>
+              <span className="font-extrabold text-sm tracking-tight text-white">SyncView Stage</span>
+            </div>
+            <span className="text-[11px] font-semibold text-slate-400">
+              Blank Canvas
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsStreamChooserOpen(true)}
+              className="px-4 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 shadow-lg shadow-indigo-600/25 flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <Play className="w-3.5 h-3.5 fill-white" />
+              <span>Choose Streams</span>
+            </button>
+          </div>
+        </header>
+
+        {/* Blank Canvas Stage Arena */}
+        <main className="flex-1 flex flex-col items-center justify-center p-6 relative overflow-hidden">
+          {/* Subtle Ambient Background Grid Frame */}
+          <div className="absolute inset-0 bg-[radial-gradient(#1e1e38_1px,transparent_1px)] [background-size:24px_24px] opacity-25 pointer-events-none" />
+
+          {/* Central Interactive Blank Canvas Stage */}
+          <div className="relative z-10 w-full max-w-4xl flex flex-col items-center gap-8 text-center my-auto">
+            {/* Aspect Ratio Synchronization Wireframe */}
+            <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
+              {/* Left Monitor: Source Video Slot (Interactive File Dropper) */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDraggingCanvasSource(true);
+                }}
+                onDragLeave={() => setIsDraggingCanvasSource(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDraggingCanvasSource(false);
+                  if (e.dataTransfer.files?.[0]) {
+                    handleSelectCanvasSourceFile(e.dataTransfer.files[0]);
+                  }
+                }}
+                onClick={() => {
+                  if (!localSourceFile) canvasFileInputRef.current?.click();
+                }}
+                className={`aspect-video rounded-2xl border-2 border-dashed p-6 flex flex-col items-center justify-center gap-3 backdrop-blur-sm cursor-pointer transition-all group ${
+                  isDraggingCanvasSource
+                    ? 'border-indigo-500 bg-indigo-950/60 scale-[1.02]'
+                    : localSourceFile
+                    ? 'border-indigo-500/80 bg-indigo-950/30'
+                    : 'border-slate-800 bg-slate-950/60 hover:border-indigo-500/60'
+                }`}
+              >
+                <input
+                  ref={canvasFileInputRef}
+                  type="file"
+                  accept="video/*,.mkv,.mp4,.webm,.mov,.avi,.m4v"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) handleSelectCanvasSourceFile(e.target.files[0]);
+                  }}
+                />
+
+                {localSourceFile ? (
+                  <div className="flex flex-col items-center text-center max-w-[280px]">
+                    <div className="w-12 h-12 rounded-xl bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 mb-2 shadow-inner">
+                      <FileVideo className="w-6 h-6" />
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-full mb-1">
+                      Local Original Video Ready
+                    </span>
+                    <span className="text-xs font-bold text-white truncate max-w-full">
+                      {localSourceFile.name}
+                    </span>
+                    <span className="text-[11px] text-slate-400 mt-0.5">
+                      {formatBytes(localSourceFile.size)} &bull; Plays instantly from disk
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        canvasFileInputRef.current?.click();
+                      }}
+                      className="mt-2 text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold underline underline-offset-4 cursor-pointer"
+                    >
+                      Change Local File
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="w-12 h-12 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 group-hover:text-indigo-400 group-hover:scale-105 transition-all">
+                      <Film className="w-6 h-6" />
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <span className="text-xs font-bold text-slate-200 uppercase tracking-wider">
+                        Original Source Video
+                      </span>
+                      <span className="text-[11px] text-indigo-400 font-medium mt-0.5">
+                        Click to select local file or drag & drop here
+                      </span>
+                      <span className="text-[10px] text-slate-500 mt-0.5">
+                        Supports MP4, WebM, MKV, MOV &bull; Or use Stream URL
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Right Monitor: Reaction Stream Slot */}
+              <div
+                onClick={() => setIsStreamChooserOpen(true)}
+                className="aspect-video rounded-2xl border-2 border-dashed border-slate-800 bg-slate-950/60 backdrop-blur-sm p-6 flex flex-col items-center justify-center gap-3 text-slate-500 group hover:border-purple-500/50 transition-all cursor-pointer"
+              >
+                <div className="w-12 h-12 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 group-hover:text-purple-400 group-hover:scale-105 transition-all">
+                  <Tv className="w-6 h-6" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                    Reaction Video Stream(s)
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    Intro offset & lip-sync calibration
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Canvas Call-to-Action Card */}
+            <div className="bg-slate-950/80 border border-slate-800/80 rounded-3xl p-6 sm:p-8 max-w-xl w-full backdrop-blur-md shadow-2xl flex flex-col items-center gap-5">
+              <div>
+                <span className="text-[10px] font-bold tracking-wider uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-3 py-1 rounded-full">
+                  Canvas Ready &bull; Zero Placeholders
+                </span>
+                <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight mt-3">
+                  Synchronize Any Reaction Video
+                </h1>
+                <p className="text-xs text-slate-400 mt-1.5 leading-relaxed max-w-md mx-auto">
+                  Play your original video (local file or stream) alongside one or more creator reactions with automatic timeline offset, drift correction, and volume balance.
+                </p>
+              </div>
+
+              {/* Primary Launch Action */}
+              <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                <button
+                  onClick={() => setIsStreamChooserOpen(true)}
+                  className="w-full sm:w-auto px-6 py-3 rounded-2xl text-xs font-bold text-white bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 hover:from-indigo-500 hover:to-purple-500 shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-2 transition-all cursor-pointer hover:scale-105"
+                >
+                  <Play className="w-4 h-4 fill-white" />
+                  <span>Choose Streams to Begin Viewing</span>
+                </button>
+
+                {onJoinPartyByCode && (
+                  <button
+                    onClick={() => setIsPartyInputOpen(true)}
+                    className="w-full sm:w-auto px-5 py-3 rounded-2xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <Users className="w-4 h-4 text-purple-400" />
+                    <span>Join Watch Party</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Quick Setup Launcher */}
+              <div className="w-full pt-4 border-t border-slate-900 flex flex-col gap-3">
+                <div className="flex items-center justify-between text-[11px] text-slate-400">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-slate-300">Original Video Source:</span>
+                    <div className="flex items-center bg-slate-900 p-0.5 rounded-lg border border-slate-800 text-[10px] font-semibold">
+                      <button
+                        type="button"
+                        onClick={() => setQuickSourceMode('file')}
+                        className={`px-2 py-0.5 rounded transition-all cursor-pointer flex items-center gap-1 ${
+                          quickSourceMode === 'file'
+                            ? 'bg-indigo-600 text-white'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        <Folder className="w-3 h-3" />
+                        <span>Local File</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQuickSourceMode('url')}
+                        className={`px-2 py-0.5 rounded transition-all cursor-pointer flex items-center gap-1 ${
+                          quickSourceMode === 'url'
+                            ? 'bg-indigo-600 text-white'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        <Globe className="w-3 h-3" />
+                        <span>Web URL</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {quickSourceMode === 'url' && (
+                    <button
+                      type="button"
+                      onClick={handleQuickTestStreams}
+                      className="text-indigo-400 hover:text-indigo-300 underline underline-offset-4 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>Fill sample URLs</span>
+                    </button>
+                  )}
+                </div>
+
+                <form onSubmit={handleQuickLaunch} className="flex flex-col gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {quickSourceMode === 'file' ? (
+                      <div
+                        onClick={() => canvasFileInputRef.current?.click()}
+                        className="bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-indigo-500/50 rounded-xl px-3 py-2 text-xs text-white flex items-center justify-between cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Folder className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                          <span className="truncate">
+                            {localSourceFile ? localSourceFile.name : 'Choose Local Original Video File...'}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider shrink-0 ml-2">
+                          {localSourceFile ? 'Change' : 'Browse'}
+                        </span>
+                      </div>
+                    ) : (
+                      <input
+                        type="url"
+                        value={quickSourceUrl}
+                        onChange={(e) => setQuickSourceUrl(e.target.value)}
+                        placeholder="Source Video Stream URL (mp4 / webm)"
+                        className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                      />
+                    )}
+
+                    <input
+                      type="url"
+                      value={quickReactionUrl}
+                      onChange={(e) => setQuickReactionUrl(e.target.value)}
+                      placeholder="Reaction Video Stream URL (or MP4 link)"
+                      className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <input
+                      type="text"
+                      value={quickReactorName}
+                      onChange={(e) => setQuickReactorName(e.target.value)}
+                      placeholder="Reactor Name (optional)"
+                      className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 sm:col-span-2"
+                    />
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        value={quickIntroOffset}
+                        onChange={(e) => setQuickIntroOffset(parseFloat(e.target.value) || 0)}
+                        placeholder="Intro offset"
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-white font-mono text-center focus:outline-none focus:border-indigo-500"
+                      />
+                      <span className="text-[11px] text-slate-400">sec</span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="mt-1 w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-lg shadow-indigo-600/20 cursor-pointer"
+                  >
+                    Launch Synchronized Viewing
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        {/* Stream Chooser Modal */}
+        <StreamChooserModal
+          isOpen={isStreamChooserOpen}
+          onClose={() => setIsStreamChooserOpen(false)}
+          onLaunchStreams={handleLaunchChosenStreams}
+        />
+
+        {/* Join Watch Party Dialog */}
+        {isPartyInputOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+            <div className="bg-[#0b0f19] border border-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-purple-400" />
+                  <h3 className="text-sm font-bold text-white">Join Synchronized Watch Party</h3>
+                </div>
+                <button
+                  onClick={() => setIsPartyInputOpen(false)}
+                  className="text-slate-500 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-xs text-slate-400">
+                Enter the 6-character room code shared by the host to join in real-time sync.
+              </p>
+              <input
+                type="text"
+                maxLength={6}
+                value={partyInputCode}
+                onChange={(e) => setPartyInputCode(e.target.value.toUpperCase())}
+                placeholder="e.g. 72K69J"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-center font-mono font-bold tracking-widest text-white uppercase focus:outline-none focus:border-purple-500"
+              />
+              <button
+                onClick={() => {
+                  if (partyInputCode.trim() && onJoinPartyByCode) {
+                    onJoinPartyByCode(partyInputCode.trim());
+                    setIsPartyInputOpen(false);
+                  }
+                }}
+                className="w-full py-2.5 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-500 transition-colors cursor-pointer"
+              >
+                Join Party
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ========================================================
+  // 2. ACTIVE SYNCHRONIZED THEATRE VIEW
+  // ========================================================
   const currentSourceTime = syncState?.sourceTime || 0;
-  const currentDuration = sourceVideo.duration || 180;
+  const currentDuration = sourceVideo?.duration || 180;
   const currentLayout = syncState?.layout || 'side-by-side';
   const isAdvanced = syncState?.isAdvancedMode || false;
   const primaryStatus = syncState?.primaryStatus || 'synced';
-
-  // Available reactors from sample catalogue not yet added
-  const availableCatalogueReactions = SAMPLE_REACTIONS.filter(
-    (r) =>
-      r.id !== primaryReaction.id &&
-      !extraReactions.some((er) => er.id === r.id) &&
-      r.sourceId === sourceVideo.id
-  );
 
   return (
     <div className="relative min-h-screen bg-[#07090e] text-slate-100 flex flex-col font-sans">
       {/* Top Header Bar */}
       <header className="border-b border-slate-800/80 bg-slate-950/70 backdrop-blur-md px-4 py-2.5 flex items-center justify-between sticky top-0 z-30">
         <div className="flex items-center gap-3">
-          <button
-            onClick={onExit}
-            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 transition-colors"
-          >
-            <span>&larr; Exit Theatre</span>
-          </button>
+          {onExit && (
+            <button
+              onClick={onExit}
+              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 transition-colors"
+            >
+              <span>&larr; Exit</span>
+            </button>
+          )}
           <div className="h-4 w-px bg-slate-800" />
           <h2 className="text-sm font-semibold text-white truncate max-w-md">
             {sourceVideo.title}
@@ -375,6 +934,35 @@ export function Theatre({
           <span className="text-xs text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded-full font-medium">
             with {primaryReaction.creator}
           </span>
+
+          {/* Change streams button */}
+          <button
+            onClick={() => setIsStreamChooserOpen(true)}
+            className="hidden sm:flex items-center gap-1.5 text-xs text-indigo-300 hover:text-white px-2.5 py-1 rounded-lg bg-indigo-600/20 border border-indigo-500/30 hover:bg-indigo-600/30 transition-colors cursor-pointer"
+            title="Change streams or add extra reactors"
+          >
+            <Tv className="w-3.5 h-3.5" />
+            <span>Streams ({1 + extraReactions.length})</span>
+          </button>
+
+          {/* Clear back to blank canvas button */}
+          <button
+            onClick={() => {
+              setSourceVideo(null);
+              setPrimaryReaction(null);
+              setExtraReactions([]);
+              if (controllerRef.current) {
+                controllerRef.current.destroy();
+                controllerRef.current = null;
+              }
+              setSyncState(null);
+            }}
+            className="hidden md:flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 px-2 py-1 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 transition-colors cursor-pointer"
+            title="Clear and return to blank canvas"
+          >
+            <RotateCcw className="w-3 h-3" />
+            <span>Blank Canvas</span>
+          </button>
         </div>
 
         {/* Sync Status Badge & Mode Switcher */}
@@ -515,8 +1103,13 @@ export function Theatre({
                 id="source-player"
                 src={sourceVideo.url}
                 title={sourceVideo.title}
-                subtitle={sourceVideo.creator}
+                subtitle={
+                  sourceVideo.isLocalFile && sourceVideo.fileName
+                    ? `${sourceVideo.fileName} (${formatBytes(sourceVideo.fileSize)})`
+                    : sourceVideo.creator
+                }
                 isSource={true}
+                isLocalFile={sourceVideo.isLocalFile}
                 isMuted={syncState?.audioFocus !== 'source' && !syncState?.isDuckingEnabled}
                 syncStatus="Master"
                 onTogglePlay={handlePlayToggle}
@@ -542,9 +1135,14 @@ export function Theatre({
                 id={primaryReaction.id}
                 src={primaryReaction.url}
                 title={primaryReaction.title}
-                subtitle={primaryReaction.creator}
+                subtitle={
+                  primaryReaction.isLocalFile && primaryReaction.fileName
+                    ? `${primaryReaction.fileName} (${formatBytes(primaryReaction.fileSize)})`
+                    : primaryReaction.creator
+                }
                 avatar={primaryReaction.avatar}
                 isPrimary={true}
+                isLocalFile={primaryReaction.isLocalFile}
                 isMuted={syncState?.audioFocus !== primaryReaction.id}
                 syncStatus={primaryStatus}
                 playbackRate={syncState?.primaryMetrics?.playbackRate || 1.0}
@@ -923,13 +1521,23 @@ export function Theatre({
                     >
                       <div className="flex items-center justify-between">
                         <span className="font-semibold text-slate-300">{n.userName}</span>
-                        <button
-                          onClick={() => handleSeek(n.sourceTimestamp)}
-                          className="font-mono text-[10px] text-indigo-400 hover:text-indigo-300 bg-indigo-950/60 px-1.5 py-0.5 rounded flex items-center gap-1"
-                        >
-                          <Clock className="w-2.5 h-2.5" />
-                          <span>{formatTime(n.sourceTimestamp)}</span>
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleSeek(n.sourceTimestamp)}
+                            className="font-mono text-[10px] text-indigo-400 hover:text-indigo-300 bg-indigo-950/60 px-1.5 py-0.5 rounded flex items-center gap-1"
+                          >
+                            <Clock className="w-2.5 h-2.5" />
+                            <span>{formatTime(n.sourceTimestamp)}</span>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteNote(n.id)}
+                            className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
+                            title="Delete note"
+                            aria-label="Delete note"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
                       <p className="text-slate-300 text-xs leading-relaxed">{n.text}</p>
                     </div>
@@ -1088,39 +1696,31 @@ export function Theatre({
                 </div>
               </div>
 
-              {availableCatalogueReactions.length > 0 && extraReactions.length < 4 && (
-                <div className="mt-2">
-                  <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-                    Add Another Reactor
-                  </h4>
-                  <div className="space-y-1.5">
-                    {availableCatalogueReactions.map((rx) => (
-                      <button
-                        key={rx.id}
-                        onClick={() => handleAddExtraReactor(rx)}
-                        className="w-full p-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-left flex items-center justify-between text-xs transition-colors"
-                      >
-                        <div className="flex items-center gap-2">
-                          <img
-                            src={rx.avatar}
-                            alt=""
-                            className="w-5 h-5 rounded-full object-cover"
-                          />
-                          <span className="font-medium text-slate-200">{rx.creator}</span>
-                        </div>
-                        <span className="flex items-center gap-1 text-[11px] text-indigo-400">
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Add</span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
+              {extraReactions.length < 4 && (
+                <div className="mt-3">
+                  <button
+                    onClick={() => setIsStreamChooserOpen(true)}
+                    className="w-full p-2.5 rounded-xl bg-indigo-600/15 hover:bg-indigo-600/25 border border-indigo-500/30 text-indigo-300 font-semibold flex items-center justify-center gap-2 text-xs transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add Extra Reactor Stream</span>
+                  </button>
                 </div>
               )}
             </div>
           )}
         </aside>
       </div>
+
+      {/* Stream Chooser Modal */}
+      <StreamChooserModal
+        isOpen={isStreamChooserOpen}
+        onClose={() => setIsStreamChooserOpen(false)}
+        onLaunchStreams={handleLaunchChosenStreams}
+        initialSource={sourceVideo}
+        initialPrimaryReaction={primaryReaction}
+        initialExtraReactions={extraReactions}
+      />
     </div>
   );
 }

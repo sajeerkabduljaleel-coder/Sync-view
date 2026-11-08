@@ -54,6 +54,9 @@ export interface VideoSource {
   category: 'Movies & TV' | 'Gaming' | 'Music' | 'Tech' | 'Sports' | 'Anime';
   description: string;
   releaseYear?: number;
+  isLocalFile?: boolean;
+  fileName?: string;
+  fileSize?: number;
 }
 
 export interface ReactionChapter {
@@ -103,6 +106,9 @@ export interface ReactionVideo {
   likes: number;
   isPublished: boolean;
   createdAt: number;
+  isLocalFile?: boolean;
+  fileName?: string;
+  fileSize?: number;
 }
 
 export type TheatreLayout =

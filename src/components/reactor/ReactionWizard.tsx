@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   VideoSource,
   ReactionVideo,
   SyncAnchor,
 } from '../../types';
-import { SAMPLE_SOURCES } from '../../data/mockCatalogue';
+import { catalogueService } from '../../services/catalogueService';
 import {
   Check,
   ArrowRight,
@@ -21,8 +21,27 @@ import {
   Play,
   UploadCloud,
   Layers,
+  Folder,
+  Globe,
+  FileVideo,
+  HardDrive,
 } from 'lucide-react';
 import { ContextualHelp } from '../common/ContextualHelp';
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
+}
+
+function formatDuration(seconds: number): string {
+  if (!seconds || isNaN(seconds)) return '--:--';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
 
 interface ReactionWizardProps {
   onComplete: (reaction: ReactionVideo, source: VideoSource) => void;
@@ -31,26 +50,110 @@ interface ReactionWizardProps {
 
 export function ReactionWizard({ onComplete, onCancel }: ReactionWizardProps) {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [savedSources, setSavedSources] = useState<VideoSource[]>([]);
 
-  // Step 1: Source
-  const [selectedSource, setSelectedSource] = useState<VideoSource>(SAMPLE_SOURCES[0]);
-  const [customSourceUrl, setCustomSourceUrl] = useState('');
-  const [customSourceTitle, setCustomSourceTitle] = useState('');
+  // Step 1: Source (Web URL or Local File)
+  const [sourceMode, setSourceMode] = useState<'file' | 'url'>('file');
+  const [sourceFile, setSourceFile] = useState<File | null>(null);
+  const [sourceFileUrl, setSourceFileUrl] = useState<string>('');
+  const [sourceFileSize, setSourceFileSize] = useState<number | null>(null);
+  const [sourceFileDuration, setSourceFileDuration] = useState<number | null>(null);
+  const [isDraggingSourceFile, setIsDraggingSourceFile] = useState(false);
+  const sourceFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Step 2: Reaction info
-  const [creatorName, setCreatorName] = useState('Alex Rivers');
-  const [reactionTitle, setReactionTitle] = useState('First Time Watching! Mind Blown Reaction');
-  const [reactionUrl, setReactionUrl] = useState('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4');
-  const [thumbnailUrl, setThumbnailUrl] = useState('https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80');
+  const [sourceUrl, setSourceUrl] = useState('');
+  const [sourceTitle, setSourceTitle] = useState('');
+  const [sourceCategory, setSourceCategory] = useState<VideoSource['category']>('Movies & TV');
+  const [selectedSource, setSelectedSource] = useState<VideoSource | null>(null);
+
+  // Step 2: Reaction info (Web URL or Local File)
+  const [reactionMode, setReactionMode] = useState<'url' | 'file'>('url');
+  const [reactionFile, setReactionFile] = useState<File | null>(null);
+  const [reactionFileUrl, setReactionFileUrl] = useState<string>('');
+  const [reactionFileSize, setReactionFileSize] = useState<number | null>(null);
+  const [reactionFileDuration, setReactionFileDuration] = useState<number | null>(null);
+  const [isDraggingReactionFile, setIsDraggingReactionFile] = useState(false);
+  const reactionFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [creatorName, setCreatorName] = useState('');
+  const [reactionTitle, setReactionTitle] = useState('');
+  const [reactionUrl, setReactionUrl] = useState('');
+  const [thumbnailUrl, setThumbnailUrl] = useState('');
 
   // Step 3: Synchronization calibration
-  const [introDuration, setIntroDuration] = useState<number>(12);
+  const [introDuration, setIntroDuration] = useState<number>(0);
   const [hasPause, setHasPause] = useState(false);
   const [pauseSourceTime, setPauseSourceTime] = useState(45);
   const [pauseDuration, setPauseDuration] = useState(10);
 
   // Step 4: Preview & Publish
   const [isPublished, setIsPublished] = useState(true);
+
+  const handleSelectSourceFile = (file: File) => {
+    try {
+      const objUrl = URL.createObjectURL(file);
+      setSourceFile(file);
+      setSourceFileUrl(objUrl);
+      setSourceFileSize(file.size);
+      setSelectedSource(null);
+
+      if (!sourceTitle) {
+        const cleanName = file.name
+          .replace(/\.[^/.]+$/, '')
+          .replace(/[_-]+/g, ' ')
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+        setSourceTitle(cleanName);
+      }
+
+      const tempVideo = document.createElement('video');
+      tempVideo.preload = 'metadata';
+      tempVideo.src = objUrl;
+      tempVideo.onloadedmetadata = () => {
+        if (tempVideo.duration && !isNaN(tempVideo.duration)) {
+          setSourceFileDuration(Math.round(tempVideo.duration));
+        }
+      };
+    } catch (e) {
+      console.error('Failed to create object URL for local source file:', e);
+    }
+  };
+
+  const handleSelectReactionFile = (file: File) => {
+    try {
+      const objUrl = URL.createObjectURL(file);
+      setReactionFile(file);
+      setReactionFileUrl(objUrl);
+      setReactionFileSize(file.size);
+
+      if (!reactionTitle) {
+        const cleanName = file.name
+          .replace(/\.[^/.]+$/, '')
+          .replace(/[_-]+/g, ' ')
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+        setReactionTitle(`${cleanName} (Reaction)`);
+      }
+
+      const tempVideo = document.createElement('video');
+      tempVideo.preload = 'metadata';
+      tempVideo.src = objUrl;
+      tempVideo.onloadedmetadata = () => {
+        if (tempVideo.duration && !isNaN(tempVideo.duration)) {
+          setReactionFileDuration(Math.round(tempVideo.duration));
+        }
+      };
+    } catch (e) {
+      console.error('Failed to create object URL for local reaction file:', e);
+    }
+  };
+
+  useEffect(() => {
+    catalogueService.getSources().then((srcs) => {
+      setSavedSources(srcs);
+      if (srcs.length > 0 && !selectedSource) {
+        setSelectedSource(srcs[0]);
+      }
+    });
+  }, []);
 
   const handleNext = () => {
     if (step < 4) setStep((prev) => (prev + 1) as any);
@@ -61,6 +164,25 @@ export function ReactionWizard({ onComplete, onCancel }: ReactionWizardProps) {
   };
 
   const handleFinish = () => {
+    const finalSourceUrl =
+      sourceMode === 'file' && sourceFileUrl
+        ? sourceFileUrl
+        : sourceUrl.trim() || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+
+    const finalSource: VideoSource = selectedSource || {
+      id: `src-${Date.now()}`,
+      title: sourceTitle.trim() || (sourceFile ? sourceFile.name : 'Custom Source Video'),
+      url: finalSourceUrl,
+      thumbnail: 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=600&q=80',
+      duration: sourceFileDuration || 600,
+      creator: sourceMode === 'file' ? 'Local Media' : 'Master Source',
+      category: sourceCategory || 'Movies & TV',
+      description: sourceMode === 'file' ? `Local video file: ${sourceFile?.name}` : 'Stream source entered by user',
+      isLocalFile: sourceMode === 'file' && Boolean(sourceFile),
+      fileName: sourceFile?.name,
+      fileSize: sourceFileSize || undefined,
+    };
+
     const anchors: SyncAnchor[] = [
       {
         id: 'anc-intro',
@@ -88,19 +210,27 @@ export function ReactionWizard({ onComplete, onCancel }: ReactionWizardProps) {
       });
     }
 
-    const duration = selectedSource.duration + introDuration + (hasPause ? pauseDuration : 0);
+    const duration = finalSource.duration + introDuration + (hasPause ? pauseDuration : 0);
+
+    const finalReactionUrl =
+      reactionMode === 'file' && reactionFileUrl
+        ? reactionFileUrl
+        : reactionUrl.trim() || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
 
     const newReaction: ReactionVideo = {
       id: `rx-${Date.now()}`,
-      sourceId: selectedSource.id,
-      creator: creatorName.trim() || 'Creator',
-      channelName: `${creatorName.trim()} Reacts`,
+      sourceId: finalSource.id,
+      creator: creatorName.trim() || 'Reactor',
+      channelName: `${creatorName.trim() || 'Reactor'} Reacts`,
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80',
-      title: reactionTitle.trim() || 'Reaction Video',
-      duration,
+      title: reactionTitle.trim() || (reactionFile ? reactionFile.name : 'Reaction Video'),
+      duration: reactionFileDuration || duration,
       introDuration,
-      url: reactionUrl,
-      thumbnail: thumbnailUrl,
+      url: finalReactionUrl,
+      thumbnail: thumbnailUrl.trim() || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80',
+      isLocalFile: reactionMode === 'file' && Boolean(reactionFile),
+      fileName: reactionFile?.name,
+      fileSize: reactionFileSize || undefined,
       anchors,
       chapters: [
         {
@@ -124,7 +254,7 @@ export function ReactionWizard({ onComplete, onCancel }: ReactionWizardProps) {
       createdAt: Date.now(),
     };
 
-    onComplete(newReaction, selectedSource);
+    onComplete(newReaction, finalSource);
   };
 
   return (
@@ -185,41 +315,203 @@ export function ReactionWizard({ onComplete, onCancel }: ReactionWizardProps) {
           <ContextualHelp
             id="wizard_step_1"
             title="Choosing a Source Video"
-            description="Select the original movie trailer, gameplay run, or music video you are reacting to. You can pick from the platform catalogue or provide a custom video URL."
+            description="Select the original movie trailer, gameplay run, or music video you are reacting to. You can pick a local video file from your computer, an online stream URL, or a catalogue item."
           />
 
-          <h3 className="text-sm font-semibold text-white">Choose Source Content</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {SAMPLE_SOURCES.map((src) => (
-              <div
-                key={src.id}
-                onClick={() => setSelectedSource(src)}
-                className={`p-3 rounded-xl border cursor-pointer transition-all flex gap-3 ${
-                  selectedSource.id === src.id
-                    ? 'bg-indigo-950/40 border-indigo-500 ring-1 ring-indigo-500'
-                    : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-white">Source Video Stream (Original Content)</h3>
+            <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 p-0.5 rounded-lg text-xs">
+              <button
+                type="button"
+                onClick={() => setSourceMode('file')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md transition-colors font-medium ${
+                  sourceMode === 'file'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <img
-                  src={src.thumbnail}
-                  alt=""
-                  className="w-24 h-16 rounded-lg object-cover shrink-0"
-                />
-                <div className="flex flex-col justify-between">
-                  <div>
-                    <span className="text-[10px] text-indigo-400 font-semibold uppercase">
-                      {src.category}
-                    </span>
-                    <h4 className="text-xs font-bold text-white line-clamp-1">{src.title}</h4>
-                    <span className="text-[11px] text-slate-400">{src.creator}</span>
-                  </div>
-                  <span className="text-[10px] font-mono text-slate-400">
-                    Duration: {Math.floor(src.duration / 60)}:{(src.duration % 60).toString().padStart(2, '0')}
-                  </span>
-                </div>
-              </div>
-            ))}
+                <Folder className="w-3.5 h-3.5" />
+                <span>Local File</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSourceMode('url')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md transition-colors font-medium ${
+                  sourceMode === 'url'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>Web URL</span>
+              </button>
+            </div>
           </div>
+
+          <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 flex flex-col gap-3">
+            {sourceMode === 'file' ? (
+              <div>
+                <input
+                  ref={sourceFileInputRef}
+                  type="file"
+                  accept="video/*,.mkv,.mp4,.webm,.mov,.avi,.m4v"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleSelectSourceFile(f);
+                  }}
+                />
+
+                {!sourceFile ? (
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDraggingSourceFile(true);
+                    }}
+                    onDragLeave={() => setIsDraggingSourceFile(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDraggingSourceFile(false);
+                      const f = e.dataTransfer.files?.[0];
+                      if (f && f.type.startsWith('video/')) {
+                        handleSelectSourceFile(f);
+                      }
+                    }}
+                    onClick={() => sourceFileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 ${
+                      isDraggingSourceFile
+                        ? 'border-indigo-500 bg-indigo-500/10'
+                        : 'border-slate-700 bg-slate-950/60 hover:border-indigo-400 hover:bg-slate-950'
+                    }`}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center">
+                      <UploadCloud className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-white">
+                        Click to browse or drag & drop a local video file
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        MP4, WebM, MKV, MOV &bull; Zero upload lag (plays instantly in browser)
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-slate-950 border border-indigo-500/40 rounded-xl p-3.5 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-lg bg-indigo-600/20 text-indigo-400 flex items-center justify-center shrink-0">
+                        <FileVideo className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-white truncate max-w-[280px]">
+                            {sourceFile.name}
+                          </span>
+                          <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                            LOCAL MEDIA
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                          {sourceFileSize ? formatBytes(sourceFileSize) : ''}
+                          {sourceFileDuration ? ` • ${formatDuration(sourceFileDuration)}` : ''}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => sourceFileInputRef.current?.click()}
+                      className="px-2.5 py-1 text-xs text-indigo-300 hover:text-white bg-indigo-950/60 border border-indigo-800/50 hover:bg-indigo-900/60 rounded-lg transition-colors shrink-0"
+                    >
+                      Change File
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <label className="text-xs text-slate-300 font-medium block mb-1">
+                  Source Video Stream URL (Direct MP4, WebM, or HLS)
+                </label>
+                <input
+                  type="url"
+                  value={sourceUrl}
+                  onChange={(e) => {
+                    setSourceUrl(e.target.value);
+                    setSelectedSource(null);
+                  }}
+                  placeholder="https://example.com/source-video.mp4"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+              <div>
+                <label className="text-xs text-slate-300 font-medium block mb-1">
+                  Source Content Title
+                </label>
+                <input
+                  type="text"
+                  value={sourceTitle}
+                  onChange={(e) => setSourceTitle(e.target.value)}
+                  placeholder="e.g. Dune: Part Two Trailer"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-slate-300 font-medium block mb-1">
+                  Category
+                </label>
+                <select
+                  value={sourceCategory}
+                  onChange={(e) => setSourceCategory(e.target.value as VideoSource['category'])}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="Movies & TV">Movies & TV</option>
+                  <option value="Music">Music</option>
+                  <option value="Gaming">Gaming</option>
+                  <option value="Anime">Anime</option>
+                  <option value="Tech">Tech</option>
+                  <option value="Sports">Sports</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {savedSources.length > 0 && (
+            <div className="flex flex-col gap-2 mt-2">
+              <span className="text-xs text-slate-400 font-medium">Or choose from your previously saved sources:</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {savedSources.map((src) => (
+                  <div
+                    key={src.id}
+                    onClick={() => {
+                      setSelectedSource(src);
+                      setSourceUrl(src.url);
+                      setSourceTitle(src.title);
+                      setSourceCategory(src.category);
+                      setSourceMode('url');
+                    }}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all flex gap-3 ${
+                      selectedSource?.id === src.id
+                        ? 'bg-indigo-950/40 border-indigo-500 ring-1 ring-indigo-500'
+                        : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="w-16 h-12 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400">
+                      <Film className="w-5 h-5" />
+                    </div>
+                    <div className="flex flex-col justify-center">
+                      <span className="text-[10px] text-indigo-400 font-semibold uppercase">{src.category}</span>
+                      <h4 className="text-xs font-bold text-white line-clamp-1">{src.title}</h4>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -232,31 +524,117 @@ export function ReactionWizard({ onComplete, onCancel }: ReactionWizardProps) {
             description="Provide your reaction video file or hosted stream URL, creator title, and channel information."
           />
 
-          <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 flex flex-col gap-3">
-            <div>
-              <label className="text-xs text-slate-300 font-medium block mb-1">
-                Reaction Video Title
-              </label>
-              <input
-                type="text"
-                value={reactionTitle}
-                onChange={(e) => setReactionTitle(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
-              />
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-white">Reaction Video (Camera / Reactor Feed)</h3>
+            <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 p-0.5 rounded-lg text-xs">
+              <button
+                type="button"
+                onClick={() => setReactionMode('file')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md transition-colors font-medium ${
+                  reactionMode === 'file'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Folder className="w-3.5 h-3.5" />
+                <span>Local File</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setReactionMode('url')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md transition-colors font-medium ${
+                  reactionMode === 'url'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>Web URL</span>
+              </button>
             </div>
+          </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 flex flex-col gap-3">
+            {reactionMode === 'file' ? (
               <div>
-                <label className="text-xs text-slate-300 font-medium block mb-1">
-                  Creator Name / Channel
-                </label>
                 <input
-                  type="text"
-                  value={creatorName}
-                  onChange={(e) => setCreatorName(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  ref={reactionFileInputRef}
+                  type="file"
+                  accept="video/*,.mkv,.mp4,.webm,.mov,.avi,.m4v"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleSelectReactionFile(f);
+                  }}
                 />
+
+                {!reactionFile ? (
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDraggingReactionFile(true);
+                    }}
+                    onDragLeave={() => setIsDraggingReactionFile(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDraggingReactionFile(false);
+                      const f = e.dataTransfer.files?.[0];
+                      if (f && f.type.startsWith('video/')) {
+                        handleSelectReactionFile(f);
+                      }
+                    }}
+                    onClick={() => reactionFileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 ${
+                      isDraggingReactionFile
+                        ? 'border-indigo-500 bg-indigo-500/10'
+                        : 'border-slate-700 bg-slate-950/60 hover:border-indigo-400 hover:bg-slate-950'
+                    }`}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center">
+                      <UploadCloud className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-white">
+                        Click to select your reactor footage or drag & drop video file
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Direct browser playback &bull; No upload required
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-slate-950 border border-indigo-500/40 rounded-xl p-3.5 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-lg bg-indigo-600/20 text-indigo-400 flex items-center justify-center shrink-0">
+                        <FileVideo className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-white truncate max-w-[280px]">
+                            {reactionFile.name}
+                          </span>
+                          <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                            LOCAL MEDIA
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                          {reactionFileSize ? formatBytes(reactionFileSize) : ''}
+                          {reactionFileDuration ? ` • ${formatDuration(reactionFileDuration)}` : ''}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => reactionFileInputRef.current?.click()}
+                      className="px-2.5 py-1 text-xs text-indigo-300 hover:text-white bg-indigo-950/60 border border-indigo-800/50 hover:bg-indigo-900/60 rounded-lg transition-colors shrink-0"
+                    >
+                      Change File
+                    </button>
+                  </div>
+                )}
               </div>
+            ) : (
               <div>
                 <label className="text-xs text-slate-300 font-medium block mb-1">
                   Reaction Video URL (MP4 / WebM / Stream)
@@ -265,7 +643,36 @@ export function ReactionWizard({ onComplete, onCancel }: ReactionWizardProps) {
                   type="url"
                   value={reactionUrl}
                   onChange={(e) => setReactionUrl(e.target.value)}
+                  placeholder="https://example.com/reaction-cam.mp4"
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+              <div>
+                <label className="text-xs text-slate-300 font-medium block mb-1">
+                  Reaction Video Title
+                </label>
+                <input
+                  type="text"
+                  value={reactionTitle}
+                  onChange={(e) => setReactionTitle(e.target.value)}
+                  placeholder="e.g. Creator reacts to trailer!"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-slate-300 font-medium block mb-1">
+                  Creator Name / Channel
+                </label>
+                <input
+                  type="text"
+                  value={creatorName}
+                  onChange={(e) => setCreatorName(e.target.value)}
+                  placeholder="e.g. JohnDoe"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
             </div>
@@ -358,8 +765,8 @@ export function ReactionWizard({ onComplete, onCancel }: ReactionWizardProps) {
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800">
                 <div className="text-[10px] text-slate-400">Source Video</div>
-                <div className="font-semibold text-white mt-0.5">{selectedSource.title}</div>
-                <div className="text-[11px] text-slate-400">{selectedSource.creator}</div>
+                <div className="font-semibold text-white mt-0.5">{selectedSource?.title || sourceTitle || 'Custom Source Stream'}</div>
+                <div className="text-[11px] text-slate-400">{selectedSource?.creator || 'Master Source'}</div>
               </div>
               <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800">
                 <div className="text-[10px] text-slate-400">Reaction Video</div>

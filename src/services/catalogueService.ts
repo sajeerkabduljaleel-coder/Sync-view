@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { VideoSource, ReactionVideo } from '../types';
-import { SAMPLE_SOURCES, SAMPLE_REACTIONS } from '../data/mockCatalogue';
+import { VideoSource, ReactionVideo, TheatreLayout } from '../types';
 
 export interface WatchProgress {
   sourceId: string;
@@ -15,9 +14,20 @@ export interface WatchProgress {
   completed: boolean;
 }
 
+export interface SavedStreamSetup {
+  id: string;
+  title: string;
+  source: VideoSource;
+  primaryReaction: ReactionVideo;
+  extraReactions?: ReactionVideo[];
+  layout?: TheatreLayout;
+  savedAt: number;
+}
+
 export interface ICatalogueRepository {
   getSources(): Promise<VideoSource[]>;
   getSourceById(id: string): Promise<VideoSource | null>;
+  saveSource(source: VideoSource): Promise<VideoSource>;
   getReactions(sourceId?: string): Promise<ReactionVideo[]>;
   getReactionById(id: string): Promise<ReactionVideo | null>;
   search(query: string, category?: string): Promise<{ sources: VideoSource[]; reactions: ReactionVideo[] }>;
@@ -26,17 +36,38 @@ export interface ICatalogueRepository {
   deleteReaction(id: string): Promise<boolean>;
 }
 
+const STORAGE_KEY_CUSTOM_SOURCES = 'syncview_custom_sources_v1';
 const STORAGE_KEY_CUSTOM_REACTIONS = 'syncview_custom_reactions_v1';
+const STORAGE_KEY_SAVED_STREAMS = 'syncview_saved_streams_v1';
 const STORAGE_KEY_WATCH_PROGRESS = 'syncview_watch_progress_v1';
 const STORAGE_KEY_FAVORITES = 'syncview_favorites_v1';
 
 /**
- * Local / Development Catalogue Repository that seeds from standard curated fixtures
- * and persists creator studio additions and edits to client storage.
+ * Production-ready Catalogue Repository that persists custom streams, calibrated
+ * reactions, and viewer library state to client storage without generic placeholder videos.
  */
 export class LocalCatalogueRepository implements ICatalogueRepository {
-  private sources: VideoSource[] = [...SAMPLE_SOURCES];
-  private baseReactions: ReactionVideo[] = [...SAMPLE_REACTIONS];
+  private sources: VideoSource[] = [];
+  private baseReactions: ReactionVideo[] = [];
+
+  private getStoredCustomSources(): VideoSource[] {
+    try {
+      if (typeof window === 'undefined') return [];
+      const stored = localStorage.getItem(STORAGE_KEY_CUSTOM_SOURCES);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private setStoredCustomSources(sources: VideoSource[]): void {
+    try {
+      if (typeof window === 'undefined') return;
+      localStorage.setItem(STORAGE_KEY_CUSTOM_SOURCES, JSON.stringify(sources));
+    } catch (err) {
+      console.warn('Failed to persist custom sources:', err);
+    }
+  }
 
   private getStoredCustomReactions(): ReactionVideo[] {
     try {
@@ -58,12 +89,25 @@ export class LocalCatalogueRepository implements ICatalogueRepository {
   }
 
   public async getSources(): Promise<VideoSource[]> {
-    return [...this.sources];
+    const custom = this.getStoredCustomSources();
+    const map = new Map<string, VideoSource>();
+    this.sources.forEach((s) => map.set(s.id, s));
+    custom.forEach((s) => map.set(s.id, s));
+    return Array.from(map.values());
   }
 
   public async getSourceById(id: string): Promise<VideoSource | null> {
-    const src = this.sources.find((s) => s.id === id);
+    const all = await this.getSources();
+    const src = all.find((s) => s.id === id);
     return src ? { ...src } : null;
+  }
+
+  public async saveSource(source: VideoSource): Promise<VideoSource> {
+    const current = this.getStoredCustomSources();
+    const filtered = current.filter((s) => s.id !== source.id);
+    filtered.unshift(source);
+    this.setStoredCustomSources(filtered);
+    return source;
   }
 
   public async getReactions(sourceId?: string): Promise<ReactionVideo[]> {
@@ -276,6 +320,74 @@ export class CatalogueService {
       }
       localStorage.setItem(STORAGE_KEY_FAVORITES, JSON.stringify(favs));
       return isFav;
+    } catch {
+      return false;
+    }
+  }
+
+  public async saveSource(source: VideoSource): Promise<VideoSource> {
+    return this.repository.saveSource(source);
+  }
+
+  // ==========================================
+  // Custom Stream Setup Persistence
+  // ==========================================
+
+  public async getSavedStreamSetups(): Promise<SavedStreamSetup[]> {
+    try {
+      if (typeof window === 'undefined') return [];
+      const raw = localStorage.getItem(STORAGE_KEY_SAVED_STREAMS);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  public async saveStreamSetup(config: {
+    source: VideoSource;
+    primaryReaction: ReactionVideo;
+    extraReactions?: ReactionVideo[];
+    layout?: TheatreLayout;
+  }): Promise<SavedStreamSetup> {
+    const list = await this.getSavedStreamSetups();
+    const id = `setup-${Date.now()}`;
+    const newSetup: SavedStreamSetup = {
+      id,
+      title: `${config.primaryReaction.creator} Reacts to ${config.source.title}`,
+      source: config.source,
+      primaryReaction: config.primaryReaction,
+      extraReactions: config.extraReactions || [],
+      layout: config.layout,
+      savedAt: Date.now(),
+    };
+    // Also save source and reaction to catalogue so they appear in library
+    await this.saveSource(config.source);
+    await this.saveReaction(config.primaryReaction);
+    if (config.extraReactions) {
+      for (const rx of config.extraReactions) {
+        await this.saveReaction(rx);
+      }
+    }
+
+    const updated = [newSetup, ...list.filter((s) => s.id !== id)];
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STORAGE_KEY_SAVED_STREAMS, JSON.stringify(updated));
+      }
+    } catch (err) {
+      console.warn('Failed to save stream setup:', err);
+    }
+    return newSetup;
+  }
+
+  public async deleteStreamSetup(id: string): Promise<boolean> {
+    try {
+      const list = await this.getSavedStreamSetups();
+      const filtered = list.filter((s) => s.id !== id);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STORAGE_KEY_SAVED_STREAMS, JSON.stringify(filtered));
+      }
+      return true;
     } catch {
       return false;
     }

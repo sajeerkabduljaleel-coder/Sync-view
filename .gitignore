@@ -11,4 +11,5 @@ coverage/
 bun.lock
 public/syncview-source.zip
 public/assets/
+.data/
 

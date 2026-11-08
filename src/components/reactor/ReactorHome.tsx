@@ -42,8 +42,19 @@ export function ReactorHome({
   const totalViews = reactions.reduce((sum, r) => sum + r.views, 0);
   const totalLikes = reactions.reduce((sum, r) => sum + r.likes, 0);
 
-  const getSourceForReaction = (reaction: ReactionVideo) => {
-    return sources.find((s) => s.id === reaction.sourceId) || sources[0];
+  const getSourceForReaction = (reaction: ReactionVideo): VideoSource => {
+    const found = sources.find((s) => s.id === reaction.sourceId);
+    if (found) return found;
+    return {
+      id: reaction.sourceId || 'src-custom',
+      title: 'Original Source Content',
+      creator: 'Creator',
+      duration: reaction.duration || 300,
+      url: '',
+      thumbnail: reaction.thumbnail || '',
+      category: 'Movies & TV',
+      description: 'Synchronized stream source',
+    };
   };
 
   return (

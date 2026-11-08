@@ -7,9 +7,10 @@ import crypto from 'node:crypto';
 import { WatchParty, WatchPartyParticipant, ChatMessage, ReactionNote, VideoSource, ReactionVideo } from '../types';
 import {
   IWatchPartyRepository,
-  FileWatchPartyRepository,
+  SingleInstanceFileWatchPartyRepository,
   StoredRoomData,
   ParticipantSession,
+  hashSecretToken,
 } from './watchPartyRepository';
 
 export interface PlaybackCommand {
@@ -38,7 +39,7 @@ export class WatchPartyManager {
   private readonly roomTtlMs = 1000 * 60 * 60 * 24; // 24 hours
 
   constructor(repository?: IWatchPartyRepository) {
-    this.repository = repository || new FileWatchPartyRepository();
+    this.repository = repository || new SingleInstanceFileWatchPartyRepository();
   }
 
   public generateRoomCode(): string {
@@ -55,6 +56,10 @@ export class WatchPartyManager {
     return crypto.randomBytes(32).toString('hex');
   }
 
+  public hashToken(token: string): string {
+    return hashSecretToken(token);
+  }
+
   /**
    * Constant-time string equality check to mitigate timing attacks.
    */
@@ -69,6 +74,7 @@ export class WatchPartyManager {
   /**
    * Creates a new watch party.
    * Host credentials and participant tokens are created server-side.
+   * Tokens are hashed with SHA-256 before storage; raw tokens are never persisted.
    */
   public async createRoom(params: {
     title: string;
@@ -81,6 +87,8 @@ export class WatchPartyManager {
     const roomCode = this.generateRoomCode();
     const hostToken = this.generateSecureToken();
     const participantToken = this.generateSecureToken();
+    const hostTokenHash = this.hashToken(hostToken);
+    const participantTokenHash = this.hashToken(participantToken);
     const hostId = `host-${Date.now()}`;
     const now = Date.now();
 
@@ -94,7 +102,7 @@ export class WatchPartyManager {
     };
 
     const hostSession: ParticipantSession = {
-      token: participantToken,
+      tokenHash: participantTokenHash,
       participantId: hostId,
       name: hostParticipant.name,
       avatar: hostParticipant.avatar,
@@ -140,24 +148,25 @@ export class WatchPartyManager {
 
     const storedData: StoredRoomData = {
       room,
-      hostToken,
+      hostTokenHash,
       sessions: {
-        [participantToken]: hostSession,
+        [participantTokenHash]: hostSession,
       },
       lastActivity: now,
+      version: 1,
     };
 
     await this.repository.saveRoom(storedData);
-    return { room: this.sanitizeRoom(room), hostToken, participantToken };
+    return { room: this.toPublicRoomDTO(room), hostToken, participantToken };
   }
 
   /**
-   * Fetches room state, sanitized to ensure host tokens and session tokens are NEVER leaked.
+   * Fetches room state, sanitized using an explicit field allowlist to guarantee no tokens or hashes leak.
    */
   public async getRoom(idOrCode: string): Promise<WatchParty | null> {
     const data = await this.findRoomData(idOrCode);
     if (!data) return null;
-    return this.sanitizeRoom(data.room);
+    return this.toPublicRoomDTO(data.room);
   }
 
   /**
@@ -174,21 +183,25 @@ export class WatchPartyManager {
 
     const now = Date.now();
 
-    // Reconnection check
-    if (existingToken && data.sessions[existingToken]) {
-      const existingSession = data.sessions[existingToken];
-      data.lastActivity = now;
-      await this.repository.saveRoom(data);
-      return {
-        room: this.sanitizeRoom(data.room),
-        participantId: existingSession.participantId,
-        participantToken: existingToken,
-      };
+    // Reconnection check using hashed token lookup
+    if (existingToken) {
+      const existingHash = this.hashToken(existingToken);
+      const existingSession = data.sessions[existingHash] || data.sessions[existingToken];
+      if (existingSession) {
+        data.lastActivity = now;
+        await this.repository.saveRoom(data);
+        return {
+          room: this.toPublicRoomDTO(data.room),
+          participantId: existingSession.participantId,
+          participantToken: existingToken,
+        };
+      }
     }
 
     const safeName = (participantName || 'Guest Viewer').trim().slice(0, 30);
     const participantId = `viewer-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
     const participantToken = this.generateSecureToken();
+    const participantTokenHash = this.hashToken(participantToken);
 
     const participant: WatchPartyParticipant = {
       id: participantId,
@@ -200,7 +213,7 @@ export class WatchPartyManager {
     };
 
     const session: ParticipantSession = {
-      token: participantToken,
+      tokenHash: participantTokenHash,
       participantId,
       name: safeName,
       avatar: participant.avatar,
@@ -214,7 +227,7 @@ export class WatchPartyManager {
     // Deduplicate participant list by ID
     data.room.participants = data.room.participants.filter((p) => p.id !== participantId);
     data.room.participants.push(participant);
-    data.sessions[participantToken] = session;
+    data.sessions[participantTokenHash] = session;
     data.lastActivity = now;
 
     data.room.chatMessages.push({
@@ -230,16 +243,35 @@ export class WatchPartyManager {
     await this.repository.saveRoom(data);
 
     return {
-      room: this.sanitizeRoom(data.room),
+      room: this.toPublicRoomDTO(data.room),
       participantId,
       participantToken,
     };
   }
 
   public async isAuthorizedHost(idOrCode: string, token: string): Promise<boolean> {
+    if (!token) return false;
     const data = await this.findRoomData(idOrCode);
-    if (!data || !token) return false;
-    return this.safeCompare(data.hostToken, token);
+    if (!data) return false;
+
+    const tokenHash = this.hashToken(token);
+    if (data.hostTokenHash) {
+      return this.safeCompare(data.hostTokenHash, tokenHash);
+    }
+    // Backward-compat for legacy unhashed records during migration
+    if (data.hostToken) {
+      return this.safeCompare(data.hostToken, token);
+    }
+    return false;
+  }
+
+  public async getParticipantSession(idOrCode: string, token: string): Promise<ParticipantSession | null> {
+    if (!token) return null;
+    const data = await this.findRoomData(idOrCode);
+    if (!data) return null;
+
+    const tokenHash = this.hashToken(token);
+    return data.sessions[tokenHash] || data.sessions[token] || null;
   }
 
   /**
@@ -254,7 +286,8 @@ export class WatchPartyManager {
     const data = await this.findRoomData(idOrCode);
     if (!data) return { success: false, error: 'Room not found' };
 
-    if (!this.safeCompare(data.hostToken, token)) {
+    const isHost = await this.isAuthorizedHost(idOrCode, token);
+    if (!isHost) {
       return { success: false, error: 'Unauthorized: valid host credentials required' };
     }
 
@@ -328,7 +361,8 @@ export class WatchPartyManager {
     const data = await this.findRoomData(idOrCode);
     if (!data) return { success: false, error: 'Room not found' };
 
-    const session = data.sessions[participantToken];
+    const tokenHash = this.hashToken(participantToken);
+    const session = data.sessions[tokenHash] || data.sessions[participantToken];
     if (!session) {
       return { success: false, error: 'Unauthorized: valid participant session required to post messages' };
     }
@@ -390,7 +424,8 @@ export class WatchPartyManager {
     const data = await this.findRoomData(idOrCode);
     if (!data) return { success: false, error: 'Room not found' };
 
-    const session = data.sessions[participantToken];
+    const tokenHash = this.hashToken(participantToken);
+    const session = data.sessions[tokenHash] || data.sessions[participantToken];
     if (!session) {
       return { success: false, error: 'Unauthorized: valid participant session required to add notes' };
     }
@@ -449,8 +484,8 @@ export class WatchPartyManager {
     if (noteIdx === -1) return { success: false, error: 'Note not found' };
 
     const note = data.room.notes[noteIdx];
-    const isHost = this.safeCompare(data.hostToken, hostToken);
-    const session = participantToken ? data.sessions[participantToken] : null;
+    const isHost = hostToken ? await this.isAuthorizedHost(idOrCode, hostToken) : false;
+    const session = participantToken ? await this.getParticipantSession(idOrCode, participantToken) : null;
     const isAuthor = session ? session.participantId === note.userId : false;
 
     if (!isAuthor && !isHost) {
@@ -475,7 +510,8 @@ export class WatchPartyManager {
     const data = await this.findRoomData(idOrCode);
     if (!data) return { success: false, error: 'Room not found' };
 
-    if (!this.safeCompare(data.hostToken, currentHostToken)) {
+    const isHost = await this.isAuthorizedHost(idOrCode, currentHostToken);
+    if (!isHost) {
       return { success: false, error: 'Unauthorized: current host credentials required' };
     }
 
@@ -493,7 +529,8 @@ export class WatchPartyManager {
     });
 
     const newHostToken = this.generateSecureToken();
-    data.hostToken = newHostToken;
+    data.hostTokenHash = this.hashToken(newHostToken);
+    delete data.hostToken; // Remove any legacy plaintext field
     data.room.hostId = targetParticipant.id;
     data.room.hostName = targetParticipant.name;
     data.lastActivity = Date.now();
@@ -510,6 +547,11 @@ export class WatchPartyManager {
     return playbackState.sourceTime + elapsedSeconds * playbackState.playbackRate;
   }
 
+  public async getAllRooms(): Promise<WatchParty[]> {
+    const records = await this.repository.getAllRooms();
+    return records.map((r) => this.toPublicRoomDTO(r.room));
+  }
+
   public async findRoomData(idOrCode: string): Promise<StoredRoomData | null> {
     let data = await this.repository.getRoomById(idOrCode);
     if (!data) {
@@ -518,13 +560,105 @@ export class WatchPartyManager {
     return data;
   }
 
-  public async getParticipantSession(idOrCode: string, token: string): Promise<ParticipantSession | null> {
-    const data = await this.findRoomData(idOrCode);
-    if (!data || !token) return null;
-    return data.sessions[token] || null;
-  }
-
-  private sanitizeRoom(room: WatchParty): WatchParty {
-    return JSON.parse(JSON.stringify(room));
+  /**
+   * Explicit allowlist DTO projection.
+   * Guarantees that internal credential hashes, session records, or server metadata never leak.
+   */
+  public toPublicRoomDTO(room: WatchParty): WatchParty {
+    return {
+      id: room.id,
+      title: room.title,
+      roomCode: room.roomCode,
+      hostId: room.hostId,
+      hostName: room.hostName,
+      sourceVideo: {
+        id: room.sourceVideo.id,
+        title: room.sourceVideo.title,
+        creator: room.sourceVideo.creator,
+        duration: room.sourceVideo.duration,
+        url: room.sourceVideo.url,
+        thumbnail: room.sourceVideo.thumbnail,
+        category: room.sourceVideo.category,
+        description: room.sourceVideo.description,
+        releaseYear: room.sourceVideo.releaseYear,
+      },
+      primaryReaction: {
+        id: room.primaryReaction.id,
+        sourceId: room.primaryReaction.sourceId,
+        creator: room.primaryReaction.creator,
+        channelName: room.primaryReaction.channelName,
+        avatar: room.primaryReaction.avatar,
+        title: room.primaryReaction.title,
+        duration: room.primaryReaction.duration,
+        introDuration: room.primaryReaction.introDuration,
+        url: room.primaryReaction.url,
+        thumbnail: room.primaryReaction.thumbnail,
+        anchors: (room.primaryReaction.anchors || []).map((a) => ({ ...a })),
+        chapters: (room.primaryReaction.chapters || []).map((c) => ({ ...c })),
+        highlights: (room.primaryReaction.highlights || []).map((h) => ({ ...h })),
+        notes: (room.primaryReaction.notes || []).map((n) => ({ ...n })),
+        views: room.primaryReaction.views ?? 0,
+        likes: room.primaryReaction.likes ?? 0,
+        isPublished: room.primaryReaction.isPublished ?? true,
+        createdAt: room.primaryReaction.createdAt ?? room.createdAt,
+      },
+      additionalReactions: (room.additionalReactions || []).map((r) => ({
+        id: r.id,
+        sourceId: r.sourceId,
+        creator: r.creator,
+        channelName: r.channelName,
+        avatar: r.avatar,
+        title: r.title,
+        duration: r.duration,
+        introDuration: r.introDuration,
+        url: r.url,
+        thumbnail: r.thumbnail,
+        anchors: (r.anchors || []).map((a) => ({ ...a })),
+        chapters: (r.chapters || []).map((c) => ({ ...c })),
+        highlights: (r.highlights || []).map((h) => ({ ...h })),
+        notes: (r.notes || []).map((n) => ({ ...n })),
+        views: r.views ?? 0,
+        likes: r.likes ?? 0,
+        isPublished: r.isPublished ?? true,
+        createdAt: r.createdAt ?? room.createdAt,
+      })),
+      playbackState: {
+        isPlaying: Boolean(room.playbackState.isPlaying),
+        sourceTime: Number(room.playbackState.sourceTime) || 0,
+        playbackRate: Number(room.playbackState.playbackRate) || 1.0,
+        seq: Number(room.playbackState.seq) || 1,
+        serverTimestamp: Number(room.playbackState.serverTimestamp) || Date.now(),
+      },
+      participants: (room.participants || []).map((p) => ({
+        id: p.id,
+        name: p.name,
+        avatar: p.avatar,
+        isHost: Boolean(p.isHost),
+        joinedAt: p.joinedAt,
+        status: p.status,
+      })),
+      chatMessages: (room.chatMessages || []).map((m) => ({
+        id: m.id,
+        senderId: m.senderId,
+        senderName: m.senderName,
+        avatar: m.avatar,
+        text: m.text,
+        timestamp: m.timestamp,
+        isHost: Boolean(m.isHost),
+      })),
+      notes: (room.notes || []).map((n) => ({
+        id: n.id,
+        userId: n.userId,
+        userName: n.userName,
+        userAvatar: n.userAvatar,
+        sourceTimestamp: n.sourceTimestamp,
+        reactionTimestamp: n.reactionTimestamp,
+        text: n.text,
+        isPublic: Boolean(n.isPublic),
+        createdAt: n.createdAt,
+      })),
+      isLocked: Boolean(room.isLocked),
+      createdAt: room.createdAt,
+    };
   }
 }

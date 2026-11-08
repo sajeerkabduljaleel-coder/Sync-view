@@ -218,28 +218,6 @@ export default function App() {
     setReactorTab('create');
   };
 
-  // If Theatre is active, it takes over the viewport for focused viewing
-  if (theatreState?.active) {
-    return (
-      <Theatre
-        sourceVideo={theatreState.source}
-        primaryReaction={theatreState.primaryReaction}
-        extraReactions={theatreState.extraReactions}
-        isHost={theatreState.isHost}
-        roomCode={theatreState.roomCode}
-        hostToken={theatreState.hostToken}
-        participantToken={theatreState.participantToken}
-        onExit={() => setTheatreState(null)}
-        onOpenCreatorStudio={(rx) => {
-          setActiveStudioReaction(rx);
-          setTheatreState(null);
-          setMode('reactor');
-          setReactorTab('studio');
-        }}
-      />
-    );
-  }
-
   const activeSourceForStudio = activeStudioReaction
     ? sources.find((s) => s.id === activeStudioReaction.sourceId) || sources[0]
     : sources[0];
@@ -266,13 +244,31 @@ export default function App() {
         {mode === 'viewer' ? (
           <>
             {viewerTab === 'home' && (
-              <ViewerHome
-                sources={sources}
-                reactions={reactions}
-                onWatch={handleWatchInTheatre}
+              <Theatre
+                sourceVideo={theatreState?.source || null}
+                primaryReaction={theatreState?.primaryReaction || null}
+                extraReactions={theatreState?.extraReactions || []}
+                isHost={theatreState?.isHost ?? true}
+                roomCode={theatreState?.roomCode}
+                hostToken={theatreState?.hostToken}
+                participantToken={theatreState?.participantToken}
+                onExit={() => setTheatreState(null)}
+                onOpenCreatorStudio={(rx) => {
+                  setActiveStudioReaction(rx);
+                  setTheatreState(null);
+                  setMode('reactor');
+                  setReactorTab('studio');
+                }}
+                onStreamsChanged={(config) => {
+                  setTheatreState({
+                    active: true,
+                    source: config.source,
+                    primaryReaction: config.primaryReaction,
+                    extraReactions: config.extraReactions,
+                    isHost: true,
+                  });
+                }}
                 onJoinPartyByCode={handleJoinParty}
-                onCreateParty={handleCreateParty}
-                onSwitchToReactor={() => handleSwitchMode('reactor')}
               />
             )}
             {viewerTab === 'explore' && (
@@ -295,6 +291,10 @@ export default function App() {
                 sources={sources}
                 reactions={reactions}
                 onWatch={handleWatchInTheatre}
+                onOpenStreamChooser={() => {
+                  setViewerTab('home');
+                  setTheatreState(null);
+                }}
               />
             )}
           </>

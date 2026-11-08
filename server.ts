@@ -7,6 +7,7 @@ import express, { Request, Response } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { WatchPartyManager } from './src/services/watchPartyModel';
+import { ReactionVideo } from './src/types';
 import { SAMPLE_SOURCES, SAMPLE_REACTIONS } from './src/data/mockCatalogue';
 import { exportAnchorsToCsv, importAnchorsFromCsv } from './src/services/syncEngine';
 import {
@@ -93,41 +94,128 @@ app.get('/api/catalogue/reactions', (req: Request, res: Response) => {
 // Browse active watch parties
 app.get('/api/parties', async (_req: Request, res: Response) => {
   try {
-    const activeDemo = await partyManager.getRoom('room-featured-demo');
-    if (activeDemo) {
-      return res.json([activeDemo]);
-    }
-    res.json([]);
+    const allRooms = await partyManager.getAllRooms();
+    res.json(allRooms);
   } catch (err) {
     res.status(500).json({ error: 'Failed to retrieve active parties' });
   }
 });
 
-// Create a new room
+// Create a new room with strict input validation
 app.post('/api/parties', async (req: Request, res: Response) => {
   try {
-    const { title, sourceId, reactionId } = req.body;
+    const {
+      title,
+      hostName,
+      sourceId,
+      reactionId,
+      additionalReactionIds,
+      source: directSource,
+      reaction: directReaction,
+      additionalReactions: directAdditional,
+    } = req.body;
 
-    // Derive host name from authenticated session if logged in; otherwise sanitize input or default
-    const hostName = req.user
-      ? req.user.name
-      : typeof req.body.hostName === 'string'
-      ? sanitizeHtml(req.body.hostName.trim().slice(0, 30))
-      : 'Host';
+    let source = directSource;
+    let primaryReaction = directReaction;
 
-    const cleanTitle = typeof title === 'string' && title.trim()
-      ? sanitizeHtml(title.trim().slice(0, 80))
-      : undefined;
+    // 1. Resolve source
+    if (!source) {
+      if (!sourceId || typeof sourceId !== 'string' || !sourceId.trim()) {
+        return res.status(400).json({ error: 'Missing or invalid required field: sourceId' });
+      }
+      source = SAMPLE_SOURCES.find((s) => s.id === sourceId.trim());
+      if (!source) {
+        return res.status(404).json({ error: `Source video with id "${sourceId}" was not found` });
+      }
+    }
 
-    const source = SAMPLE_SOURCES.find((s) => s.id === sourceId) || SAMPLE_SOURCES[0];
-    const primaryReaction = SAMPLE_REACTIONS.find((r) => r.id === reactionId) || SAMPLE_REACTIONS[0];
-    const additional = SAMPLE_REACTIONS.filter(
-      (r) => r.sourceId === source.id && r.id !== primaryReaction.id
-    ).slice(0, 4);
+    // 2. Resolve reaction
+    if (!primaryReaction) {
+      if (!reactionId || typeof reactionId !== 'string' || !reactionId.trim()) {
+        return res.status(400).json({ error: 'Missing or invalid required field: reactionId' });
+      }
+      primaryReaction = SAMPLE_REACTIONS.find((r) => r.id === reactionId.trim());
+      if (!primaryReaction) {
+        return res.status(404).json({ error: `Reaction video with id "${reactionId}" was not found` });
+      }
+    }
+
+    // 3. Confirm selected reaction belongs to selected source
+    if (primaryReaction.sourceId !== source.id) {
+      return res.status(400).json({
+        error: `Mismatched reaction: Reaction "${primaryReaction.id}" is mapped to source "${primaryReaction.sourceId}", not "${source.id}"`,
+      });
+    }
+
+    // 4. Validate additional reaction IDs or objects
+    const additional: ReactionVideo[] = [];
+    if (Array.isArray(directAdditional)) {
+      additional.push(...directAdditional.slice(0, 4));
+    } else if (additionalReactionIds !== undefined) {
+      if (!Array.isArray(additionalReactionIds)) {
+        return res.status(400).json({ error: 'additionalReactionIds must be an array of strings' });
+      }
+      if (additionalReactionIds.length > 4) {
+        return res.status(400).json({ error: 'A maximum of 4 additional reactions can be added' });
+      }
+      for (const extraId of additionalReactionIds) {
+        if (typeof extraId !== 'string' || !extraId.trim()) {
+          return res.status(400).json({ error: 'Invalid extra reaction id format' });
+        }
+        const cleanExtraId = extraId.trim();
+        if (cleanExtraId === primaryReaction.id) {
+          return res.status(400).json({ error: 'Additional reaction cannot be identical to primary reaction' });
+        }
+        const extraRx = SAMPLE_REACTIONS.find((r) => r.id === cleanExtraId);
+        if (!extraRx) {
+          return res.status(404).json({ error: `Additional reaction with id "${cleanExtraId}" was not found` });
+        }
+        if (extraRx.sourceId !== source.id) {
+          return res.status(400).json({
+            error: `Additional reaction "${cleanExtraId}" does not belong to source "${source.id}"`,
+          });
+        }
+        if (!additional.some((a) => a.id === extraRx.id)) {
+          additional.push(extraRx);
+        }
+      }
+    } else {
+      // Default auto-populated extras belonging to the same source
+      const autoExtras = SAMPLE_REACTIONS.filter(
+        (r) => r.sourceId === source.id && r.id !== primaryReaction.id
+      ).slice(0, 4);
+      additional.push(...autoExtras);
+    }
+
+    // 7. Validate and sanitize title
+    let cleanTitle = `${primaryReaction.creator}'s Watch Party`;
+    if (title !== undefined) {
+      if (typeof title !== 'string' || !title.trim()) {
+        return res.status(400).json({ error: 'Room title cannot be empty if specified' });
+      }
+      if (title.trim().length > 80) {
+        return res.status(400).json({ error: 'Room title exceeds maximum length of 80 characters' });
+      }
+      cleanTitle = sanitizeHtml(title.trim());
+    }
+
+    // 8. Validate and sanitize host display name
+    let cleanHostName = 'Host';
+    if (req.user) {
+      cleanHostName = req.user.name;
+    } else if (hostName !== undefined) {
+      if (typeof hostName !== 'string' || !hostName.trim()) {
+        return res.status(400).json({ error: 'Host name cannot be empty if specified' });
+      }
+      if (hostName.trim().length > 30) {
+        return res.status(400).json({ error: 'Host name exceeds maximum length of 30 characters' });
+      }
+      cleanHostName = sanitizeHtml(hostName.trim());
+    }
 
     const { room, hostToken, participantToken } = await partyManager.createRoom({
-      title: cleanTitle || `${primaryReaction.creator}'s Watch Party`,
-      hostName,
+      title: cleanTitle,
+      hostName: cleanHostName,
       sourceVideo: source,
       primaryReaction,
       additionalReactions: additional,
@@ -250,9 +338,10 @@ app.post(
 
       // Sender identity and display name are derived entirely by the server session!
       // Client-supplied senderId, senderName, and isHost are REJECTED and ignored.
+      const rawToken = req.rawParticipantToken || extractParticipantToken(req);
       const result = await partyManager.addChatMessage(
         req.params.id,
-        session.token,
+        rawToken,
         text
       );
 
@@ -273,7 +362,6 @@ app.post(
   createRequireRoomMembership(partyManager),
   async (req: Request, res: Response) => {
     try {
-      const session = req.participantSession!;
       const { sourceTime, reactionTime, text } = req.body;
 
       if (typeof text !== 'string' || !text.trim()) {
@@ -292,9 +380,10 @@ app.post(
       }
 
       // Note ownership and author name are derived entirely from server session!
+      const rawToken = req.rawParticipantToken || extractParticipantToken(req);
       const result = await partyManager.addNote(
         req.params.id,
-        session.token,
+        rawToken,
         parsedSourceTime,
         parsedReactionTime,
         text
@@ -394,22 +483,6 @@ app.post('/api/reactions/import-csv', (req: Request, res: Response) => {
 // ==========================================
 
 async function startServer() {
-  // Seed featured demo party if none exists
-  try {
-    const existing = await partyManager.getRoom('room-featured-demo');
-    if (!existing) {
-      await partyManager.createRoom({
-        title: '🔥 Live Film Breakdown: Aethelgard Reveal',
-        hostName: 'Marcus Vance',
-        sourceVideo: SAMPLE_SOURCES[0],
-        primaryReaction: SAMPLE_REACTIONS[0],
-        additionalReactions: [SAMPLE_REACTIONS[1], SAMPLE_REACTIONS[2]],
-      });
-    }
-  } catch (err) {
-    console.warn('Initial room seed notice:', err);
-  }
-
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
