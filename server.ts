@@ -23,6 +23,7 @@ import {
   isValidCommandType,
   sanitizeHtml,
 } from './src/server/authMiddleware';
+import { handleMediaStream, handleMediaInspect } from './src/server/mediaStreamProxy';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -74,6 +75,10 @@ app.get('/api/download-source', (_req: Request, res: Response) => {
     }
   });
 });
+
+// Media Stream Proxy & Google Drive Resolution (Supports Range Requests 206)
+app.get('/api/media/stream', handleMediaStream);
+app.get('/api/media/inspect', handleMediaInspect);
 
 // Catalogue API
 app.get('/api/catalogue/sources', (_req: Request, res: Response) => {

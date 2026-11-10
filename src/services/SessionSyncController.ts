@@ -129,22 +129,25 @@ export class SessionSyncController {
 
   /**
    * Authoritative Play action across all players.
+   * If one stream has an error or is unready, healthy streams continue playing smoothly.
    */
   public async play(): Promise<void> {
     this.state.isPlaying = true;
     const promises: Promise<any>[] = [];
 
-    if (this.sourceElement && this.sourceElement.paused) {
+    if (this.sourceElement && this.sourceElement.paused && !this.sourceElement.error) {
       promises.push(this.sourceElement.play().catch(() => {}));
     }
 
     for (const [id, el] of this.reactionElements.entries()) {
-      if (el && el.paused) {
-        // Fast pre-align before play
+      if (el && el.paused && !el.error) {
+        // Fast pre-align before play if metadata is available
         const anchors = this.reactionAnchors.get(id) || [];
         const target = mapSourceToReaction(this.getSourceTime(), anchors);
-        if (Math.abs(el.currentTime - target) > 0.5) {
-          el.currentTime = Math.max(0, target);
+        if (el.readyState >= 1 && Math.abs(el.currentTime - target) > 0.5) {
+          try {
+            el.currentTime = Math.max(0, target);
+          } catch {}
         }
         promises.push(el.play().catch(() => {}));
       }
@@ -160,11 +163,15 @@ export class SessionSyncController {
   public pause(): void {
     this.state.isPlaying = false;
     if (this.sourceElement && !this.sourceElement.paused) {
-      this.sourceElement.pause();
+      try {
+        this.sourceElement.pause();
+      } catch {}
     }
     for (const el of this.reactionElements.values()) {
       if (el && !el.paused) {
-        el.pause();
+        try {
+          el.pause();
+        } catch {}
       }
     }
     this.state.primaryStatus = 'paused';
@@ -186,16 +193,20 @@ export class SessionSyncController {
     const clampedSourceTime = Math.max(0, targetSourceTime);
     this.state.sourceTime = clampedSourceTime;
 
-    if (this.sourceElement) {
-      this.sourceElement.currentTime = clampedSourceTime;
+    if (this.sourceElement && !this.sourceElement.error && this.sourceElement.readyState >= 1) {
+      try {
+        this.sourceElement.currentTime = clampedSourceTime;
+      } catch {}
     }
 
-    // Simultaneously seek all reaction players to their mapped timeline points
+    // Simultaneously seek all healthy reaction players to their mapped timeline points
     for (const [id, el] of this.reactionElements.entries()) {
       const anchors = this.reactionAnchors.get(id) || [];
       const targetReactionTime = mapSourceToReaction(clampedSourceTime, anchors);
-      if (el) {
-        el.currentTime = Math.max(0, targetReactionTime);
+      if (el && !el.error && el.readyState >= 1) {
+        try {
+          el.currentTime = Math.max(0, targetReactionTime);
+        } catch {}
       }
     }
 
@@ -214,7 +225,7 @@ export class SessionSyncController {
   }
 
   public getSourceTime(): number {
-    if (this.sourceElement) {
+    if (this.sourceElement && !this.sourceElement.error) {
       return this.sourceElement.currentTime;
     }
     return this.state.sourceTime;
@@ -286,6 +297,10 @@ export class SessionSyncController {
     this.syncIntervalId = setInterval(() => {
       this.evaluateSyncCycle();
     }, 100);
+
+    if (this.syncIntervalId && typeof this.syncIntervalId.unref === 'function') {
+      this.syncIntervalId.unref();
+    }
   }
 
   private evaluateSyncCycle(): void {
@@ -294,7 +309,7 @@ export class SessionSyncController {
     const sourceCurrentTime = this.getSourceTime();
     this.state.sourceTime = sourceCurrentTime;
 
-    if (this.sourceElement) {
+    if (this.sourceElement && !this.sourceElement.error) {
       this.state.sourceDuration = this.sourceElement.duration || 180;
       this.state.isPlaying = !this.sourceElement.paused;
     }
@@ -304,6 +319,26 @@ export class SessionSyncController {
 
     for (const [id, el] of this.reactionElements.entries()) {
       if (!el) continue;
+
+      // If the reaction video encountered a media error, report error status and do not attempt rate adjustments
+      if (el.error) {
+        const errorMetrics: DriftMetrics = {
+          currentDrift: 0,
+          targetTime: 0,
+          actualTime: el.currentTime || 0,
+          status: 'drifting',
+          playbackRate: 1.0,
+          lastCorrectionTime: Date.now(),
+          correctionCount: this.state.primaryMetrics?.correctionCount || 0,
+        };
+        if (id === primaryId) {
+          this.state.primaryStatus = 'drifting';
+          this.state.primaryMetrics = errorMetrics;
+        } else {
+          extraMetrics[id] = errorMetrics;
+        }
+        continue;
+      }
 
       const anchors = this.reactionAnchors.get(id) || [];
       const targetTime = mapSourceToReaction(sourceCurrentTime, anchors);
@@ -320,11 +355,13 @@ export class SessionSyncController {
         this.config
       );
 
-      // If playing and not buffering, apply drift correction
-      if (this.state.isPlaying && !isBuffering) {
+      // If playing and ready (not buffering), apply drift correction
+      if (this.state.isPlaying && !isBuffering && el.readyState >= 2) {
         if (correction.shouldHardSeek && correction.seekTarget !== null) {
-          el.currentTime = correction.seekTarget;
-          el.playbackRate = 1.0;
+          try {
+            el.currentTime = correction.seekTarget;
+            el.playbackRate = 1.0;
+          } catch {}
         } else {
           el.playbackRate = correction.recommendedRate;
         }

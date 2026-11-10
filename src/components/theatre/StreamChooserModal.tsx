@@ -27,6 +27,12 @@ import {
 } from 'lucide-react';
 import { VideoSource, ReactionVideo, TheatreLayout } from '../../types';
 import { catalogueService, SavedStreamSetup } from '../../services/catalogueService';
+import {
+  parseGoogleDriveUrl,
+  isGoogleDriveUrl,
+  validateUrlInput,
+  resolvePlayableMediaUrl,
+} from '../../services/mediaResolver';
 
 interface StreamChooserModalProps {
   isOpen: boolean;
@@ -250,8 +256,8 @@ export function StreamChooserModal({
     e.preventDefault();
 
     // Validate Source
-    const finalSourceUrl = sourceMode === 'file' ? sourceFileUrl : sourceUrl.trim();
-    if (!finalSourceUrl) {
+    const rawSourceUrl = sourceMode === 'file' ? sourceFileUrl : sourceUrl.trim();
+    if (!rawSourceUrl) {
       if (sourceMode === 'file') {
         setFormError('Please select a local video file for the Original Video.');
       } else {
@@ -260,9 +266,17 @@ export function StreamChooserModal({
       return;
     }
 
+    if (sourceMode === 'url') {
+      const sourceValidation = validateUrlInput(rawSourceUrl);
+      if (!sourceValidation.isValid) {
+        setFormError(`Source Video: ${sourceValidation.error}`);
+        return;
+      }
+    }
+
     // Validate Reaction
-    const finalReactionUrl = reactionMode === 'file' ? reactionFileUrl : reactionUrl.trim();
-    if (!finalReactionUrl) {
+    const rawReactionUrl = reactionMode === 'file' ? reactionFileUrl : reactionUrl.trim();
+    if (!rawReactionUrl) {
       if (reactionMode === 'file') {
         setFormError('Please select a local video file for the Reaction Video.');
       } else {
@@ -270,6 +284,28 @@ export function StreamChooserModal({
       }
       return;
     }
+
+    if (reactionMode === 'url') {
+      const rxValidation = validateUrlInput(rawReactionUrl);
+      if (!rxValidation.isValid) {
+        setFormError(`Reaction Video: ${rxValidation.error}`);
+        return;
+      }
+    }
+
+    // Validate Extra Reactors if present
+    for (const er of extraReactors) {
+      if (er.url.trim()) {
+        const erValidation = validateUrlInput(er.url.trim());
+        if (!erValidation.isValid) {
+          setFormError(`Extra Reactor (${er.creator || 'Unnamed'}): ${erValidation.error}`);
+          return;
+        }
+      }
+    }
+
+    const finalSourceUrl = sourceMode === 'file' ? rawSourceUrl : resolvePlayableMediaUrl(rawSourceUrl);
+    const finalReactionUrl = reactionMode === 'file' ? rawReactionUrl : resolvePlayableMediaUrl(rawReactionUrl);
 
     const cleanSourceTitle =
       sourceTitle.trim() ||
@@ -645,9 +681,14 @@ export function StreamChooserModal({
                           type="url"
                           value={sourceUrl}
                           onChange={(e) => setSourceUrl(e.target.value)}
-                          placeholder="https://example.com/source-video.mp4"
+                          placeholder="https://example.com/source-video.mp4 or Google Drive link"
                           className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
                         />
+                        {isGoogleDriveUrl(sourceUrl) && (
+                          <div className="text-[10px] text-indigo-400 mt-1 flex items-center gap-1">
+                            <span>Google Drive link detected &bull; Must be shared as &quot;Anyone with the link can view&quot;</span>
+                          </div>
+                        )}
                       </div>
                       <div>
                         <label className="text-[11px] font-semibold text-slate-300 block mb-1">
@@ -849,9 +890,14 @@ export function StreamChooserModal({
                         type="url"
                         value={reactionUrl}
                         onChange={(e) => setReactionUrl(e.target.value)}
-                        placeholder="https://example.com/reactor-video.mp4"
+                        placeholder="https://example.com/reactor-video.mp4 or Google Drive link"
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-purple-500"
                       />
+                      {isGoogleDriveUrl(reactionUrl) && (
+                        <div className="text-[10px] text-purple-400 mt-1 flex items-center gap-1">
+                          <span>Google Drive link detected &bull; Must be shared as &quot;Anyone with the link can view&quot;</span>
+                        </div>
+                      )}
                     </div>
                     <div>
                       <label className="text-[11px] font-semibold text-slate-300 block mb-1">

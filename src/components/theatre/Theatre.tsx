@@ -51,6 +51,12 @@ import { VideoPlayer } from './VideoPlayer';
 import { ContextualHelp } from '../common/ContextualHelp';
 import { StreamChooserModal } from './StreamChooserModal';
 import { catalogueService } from '../../services/catalogueService';
+import {
+  parseGoogleDriveUrl,
+  isGoogleDriveUrl,
+  validateUrlInput,
+  resolvePlayableMediaUrl,
+} from '../../services/mediaResolver';
 
 function formatBytes(bytes: number | null | undefined): string {
   if (!bytes || bytes <= 0) return '0 B';
@@ -496,12 +502,15 @@ export function Theatre({
       ? localSourceFile.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ')
       : 'Original Source Video';
 
+    const resolvedSourceUrl = resolvePlayableMediaUrl(effectiveSourceUrl.trim());
+    const resolvedReactionUrl = resolvePlayableMediaUrl(quickReactionUrl.trim());
+
     const source: VideoSource = {
       id: sourceId,
       title: cleanSourceTitle,
       creator: localSourceFile ? 'Local Media File' : 'Source Content Creator',
       duration: localSourceDuration || 300,
-      url: effectiveSourceUrl.trim(),
+      url: resolvedSourceUrl,
       thumbnail: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80',
       category: 'Movies & TV',
       description: localSourceFile ? `Local file: ${localSourceFile.name}` : 'Synchronized stream viewing session',
@@ -519,7 +528,7 @@ export function Theatre({
       title: `${cleanReactor} Reacts to ${cleanSourceTitle}`,
       duration: 320,
       introDuration: Math.max(0, Number(quickIntroOffset) || 0),
-      url: quickReactionUrl.trim(),
+      url: resolvedReactionUrl,
       thumbnail: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80',
       anchors: [
         {
@@ -801,22 +810,36 @@ export function Theatre({
                         </span>
                       </div>
                     ) : (
-                      <input
-                        type="url"
-                        value={quickSourceUrl}
-                        onChange={(e) => setQuickSourceUrl(e.target.value)}
-                        placeholder="Source Video Stream URL (mp4 / webm)"
-                        className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
-                      />
+                      <div className="flex flex-col gap-1">
+                        <input
+                          type="url"
+                          value={quickSourceUrl}
+                          onChange={(e) => setQuickSourceUrl(e.target.value)}
+                          placeholder="Source Video Stream URL (or Google Drive link)"
+                          className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                        />
+                        {isGoogleDriveUrl(quickSourceUrl) && (
+                          <div className="text-[10px] text-indigo-400 flex items-center gap-1 px-1">
+                            <span>Google Drive link detected &bull; Must be shared as &quot;Anyone with the link can view&quot;</span>
+                          </div>
+                        )}
+                      </div>
                     )}
 
-                    <input
-                      type="url"
-                      value={quickReactionUrl}
-                      onChange={(e) => setQuickReactionUrl(e.target.value)}
-                      placeholder="Reaction Video Stream URL (or MP4 link)"
-                      className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
-                    />
+                    <div className="flex flex-col gap-1">
+                      <input
+                        type="url"
+                        value={quickReactionUrl}
+                        onChange={(e) => setQuickReactionUrl(e.target.value)}
+                        placeholder="Reaction Video Stream URL (or Google Drive link)"
+                        className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                      />
+                      {isGoogleDriveUrl(quickReactionUrl) && (
+                        <div className="text-[10px] text-indigo-400 flex items-center gap-1 px-1">
+                          <span>Google Drive link detected &bull; Must be shared as &quot;Anyone with the link can view&quot;</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">

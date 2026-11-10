@@ -27,6 +27,7 @@ import {
   HardDrive,
 } from 'lucide-react';
 import { ContextualHelp } from '../common/ContextualHelp';
+import { resolvePlayableMediaUrl, isGoogleDriveUrl } from '../../services/mediaResolver';
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -164,10 +165,11 @@ export function ReactionWizard({ onComplete, onCancel }: ReactionWizardProps) {
   };
 
   const handleFinish = () => {
-    const finalSourceUrl =
+    const rawSourceUrl =
       sourceMode === 'file' && sourceFileUrl
         ? sourceFileUrl
         : sourceUrl.trim() || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+    const finalSourceUrl = sourceMode === 'file' ? rawSourceUrl : resolvePlayableMediaUrl(rawSourceUrl);
 
     const finalSource: VideoSource = selectedSource || {
       id: `src-${Date.now()}`,
@@ -212,10 +214,11 @@ export function ReactionWizard({ onComplete, onCancel }: ReactionWizardProps) {
 
     const duration = finalSource.duration + introDuration + (hasPause ? pauseDuration : 0);
 
-    const finalReactionUrl =
+    const rawReactionUrl =
       reactionMode === 'file' && reactionFileUrl
         ? reactionFileUrl
         : reactionUrl.trim() || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+    const finalReactionUrl = reactionMode === 'file' ? rawReactionUrl : resolvePlayableMediaUrl(rawReactionUrl);
 
     const newReaction: ReactionVideo = {
       id: `rx-${Date.now()}`,
@@ -431,7 +434,7 @@ export function ReactionWizard({ onComplete, onCancel }: ReactionWizardProps) {
             ) : (
               <div>
                 <label className="text-xs text-slate-300 font-medium block mb-1">
-                  Source Video Stream URL (Direct MP4, WebM, or HLS)
+                  Source Video Stream URL (Direct MP4, WebM, or Google Drive)
                 </label>
                 <input
                   type="url"
@@ -440,9 +443,14 @@ export function ReactionWizard({ onComplete, onCancel }: ReactionWizardProps) {
                     setSourceUrl(e.target.value);
                     setSelectedSource(null);
                   }}
-                  placeholder="https://example.com/source-video.mp4"
+                  placeholder="https://example.com/source-video.mp4 or Google Drive link"
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 font-mono"
                 />
+                {isGoogleDriveUrl(sourceUrl) && (
+                  <div className="text-[10px] text-indigo-400 mt-1 flex items-center gap-1">
+                    <span>Google Drive link detected &bull; Must be shared as &quot;Anyone with the link can view&quot;</span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -637,15 +645,20 @@ export function ReactionWizard({ onComplete, onCancel }: ReactionWizardProps) {
             ) : (
               <div>
                 <label className="text-xs text-slate-300 font-medium block mb-1">
-                  Reaction Video URL (MP4 / WebM / Stream)
+                  Reaction Video URL (MP4 / WebM / Stream or Google Drive)
                 </label>
                 <input
                   type="url"
                   value={reactionUrl}
                   onChange={(e) => setReactionUrl(e.target.value)}
-                  placeholder="https://example.com/reaction-cam.mp4"
+                  placeholder="https://example.com/reaction-cam.mp4 or Google Drive link"
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
                 />
+                {isGoogleDriveUrl(reactionUrl) && (
+                  <div className="text-[10px] text-indigo-400 mt-1 flex items-center gap-1">
+                    <span>Google Drive link detected &bull; Must be shared as &quot;Anyone with the link can view&quot;</span>
+                  </div>
+                )}
               </div>
             )}
 
