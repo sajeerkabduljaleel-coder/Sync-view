@@ -5,52 +5,136 @@
 
 import { Request, Response } from 'express';
 import { parseGoogleDriveUrl } from '../services/mediaResolver';
+import {
+  safeFetch,
+  validateDestinationUrl,
+  mediaProxyRateLimiter,
+} from './ssrfValidator';
+
+/**
+ * Valid media content-type prefixes and mime types accepted by HTML5 video.
+ */
+const VALID_MEDIA_PREFIXES = ['video/', 'audio/'];
+const VALID_MEDIA_MIMES = new Set([
+  'application/octet-stream',
+  'application/x-mpegurl',
+  'application/vnd.apple.mpegurl',
+  'application/dash+xml',
+]);
+
+export function isPlayableMediaContentType(contentType: string | null): boolean {
+  if (!contentType) return false;
+  const clean = contentType.toLowerCase().split(';')[0].trim();
+  if (VALID_MEDIA_PREFIXES.some((prefix) => clean.startsWith(prefix))) {
+    return true;
+  }
+  return VALID_MEDIA_MIMES.has(clean);
+}
+
+/**
+ * Reads up to maxBytes from a response body stream as text,
+ * preventing unbounded buffering of huge payloads.
+ */
+async function readBoundedText(res: Response | any, maxBytes = 65536): Promise<string> {
+  if (!res.body) return '';
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (totalBytes < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        chunks.push(value);
+        totalBytes += value.length;
+      }
+    }
+  } finally {
+    reader.cancel().catch(() => {});
+  }
+
+  const combined = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    const toCopy = Math.min(chunk.length, totalBytes - offset);
+    combined.set(chunk.subarray(0, toCopy), offset);
+    offset += toCopy;
+    if (offset >= totalBytes) break;
+  }
+
+  return new TextDecoder('utf-8').decode(combined);
+}
 
 /**
  * Resolves a Google Drive file ID to its direct download URL,
- * following redirects and handling confirmation tokens for large files (>100MB).
+ * following redirects and handling confirmation tokens for large files (>100MB),
+ * while strictly validating all redirect hops against SSRF.
  */
-async function resolveGoogleDriveStreamUrl(fileId: string): Promise<{
+async function resolveGoogleDriveStreamUrl(
+  fileId: string,
+  clientSignal?: AbortSignal
+): Promise<{
   playableUrl?: string;
   isPrivate?: boolean;
   isHtml?: boolean;
-  headers?: Record<string, string>;
+  isNotFound?: boolean;
+  isQuotaExceeded?: boolean;
   error?: string;
 }> {
   const initialUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
 
   try {
-    // 1. Initial request with manual redirect handling to capture cookies and headers
-    const res = await fetch(initialUrl, {
+    const { response: res, finalUrl } = await safeFetch(initialUrl, {
       method: 'GET',
-      redirect: 'manual',
+      maxRedirects: 5,
+      timeoutMs: 8000,
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       },
+      signal: clientSignal,
     });
 
     const status = res.status;
     const location = res.headers.get('location');
 
-    // If redirected to Google Accounts login, the file is private
-    if (location && location.includes('accounts.google.com')) {
+    // 1. Check for private file login redirects
+    if (
+      (location && location.includes('accounts.google.com')) ||
+      finalUrl.includes('accounts.google.com')
+    ) {
       return {
         isPrivate: true,
         error:
-          'The Google Drive file is private or requires login. Link sharing must be set to "Anyone with the link can view".',
+          'This Google Drive file is private. Set link sharing to "Anyone with the link can view".',
       };
     }
 
-    // Direct redirect to CDN (googleusercontent.com)
+    if (status === 404) {
+      return {
+        isNotFound: true,
+        error: 'Google Drive file was not found (HTTP 404). Check the file ID.',
+      };
+    }
+
+    if (status === 403 || status === 429) {
+      return {
+        isQuotaExceeded: true,
+        error: 'Google Drive download quota exceeded or access forbidden.',
+      };
+    }
+
+    // 2. Direct redirect to CDN (googleusercontent.com)
     if (status >= 300 && status < 400 && location) {
       return { playableUrl: location };
     }
 
-    // If HTTP 200, check content type
     const contentType = res.headers.get('content-type') || '';
+
+    // 3. Handle HTML response (could be virus scan warning or private error)
     if (contentType.includes('text/html')) {
-      const htmlText = await res.text();
+      const htmlText = await readBoundedText(res, 65536);
 
       // Check if it's the virus scan confirmation page for files >100MB
       const confirmMatch = htmlText.match(/href="(\/uc\?export=download[^"]+confirm=([^"&]+)[^"]*)"/i);
@@ -60,36 +144,48 @@ async function resolveGoogleDriveStreamUrl(fileId: string): Promise<{
         htmlText.match(/name="confirm"\s+value="([^"]+)"/i)?.[1];
 
       if (confirmTokenMatch) {
-        // Collect cookies
         const setCookie = res.headers.get('set-cookie') || '';
         const secondUrl = `https://drive.google.com/uc?export=download&confirm=${confirmTokenMatch}&id=${fileId}`;
-        const secondRes = await fetch(secondUrl, {
+
+        const { response: secondRes, finalUrl: secondFinalUrl } = await safeFetch(secondUrl, {
           method: 'GET',
-          redirect: 'manual',
+          maxRedirects: 5,
+          timeoutMs: 8000,
           headers: {
             Cookie: setCookie,
             'User-Agent':
               'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           },
+          signal: clientSignal,
         });
 
         const secondLocation = secondRes.headers.get('location');
+        if (
+          (secondLocation && secondLocation.includes('accounts.google.com')) ||
+          secondFinalUrl.includes('accounts.google.com')
+        ) {
+          return {
+            isPrivate: true,
+            error: 'File requires Google login. Set sharing to "Anyone with the link can view".',
+          };
+        }
+
         if (secondLocation) {
-          if (secondLocation.includes('accounts.google.com')) {
-            return {
-              isPrivate: true,
-              error: 'File requires Google login. Set sharing to "Anyone with the link can view".',
-            };
-          }
           return { playableUrl: secondLocation };
         }
+        return { playableUrl: secondFinalUrl };
       }
 
-      // Check for private error page
-      if (htmlText.includes('You need access') || htmlText.includes('Sign in') || htmlText.includes('accounts.google.com')) {
+      // Check for access denied or sign-in in HTML body
+      if (
+        htmlText.includes('You need access') ||
+        htmlText.includes('Sign in') ||
+        htmlText.includes('ServiceLogin') ||
+        htmlText.includes('accounts.google.com')
+      ) {
         return {
           isPrivate: true,
-          error: 'The Google Drive file is private. Set link sharing to "Anyone with the link can view".',
+          error: 'This Google Drive file is private. Set link sharing to "Anyone with the link can view".',
         };
       }
 
@@ -99,15 +195,18 @@ async function resolveGoogleDriveStreamUrl(fileId: string): Promise<{
       };
     }
 
-    // Direct content
-    if (contentType.startsWith('video/') || contentType.startsWith('audio/') || contentType.includes('octet-stream')) {
-      return { playableUrl: initialUrl };
+    // 4. Direct media stream
+    if (isPlayableMediaContentType(contentType)) {
+      return { playableUrl: finalUrl };
     }
 
-    return { playableUrl: initialUrl };
+    return { playableUrl: finalUrl };
   } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      throw err;
+    }
     return {
-      error: err?.message || 'Failed to resolve Google Drive link',
+      error: 'Failed to resolve Google Drive link: ' + (err?.message || 'Network error'),
     };
   }
 }
@@ -116,92 +215,168 @@ async function resolveGoogleDriveStreamUrl(fileId: string): Promise<{
  * GET /api/media/stream
  * Streaming proxy that supports HTTP 206 Partial Content (Range requests)
  * for seeking and playback in HTML5 video elements.
+ * Strictly enforces SSRF prevention, response lifecycle aborts, and accurate content-types.
  */
 export async function handleMediaStream(req: Request, res: Response) {
+  // Rate limiting check
+  const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+  if (!mediaProxyRateLimiter.isAllowed(clientIp)) {
+    return res.status(429).json({
+      error: 'Rate limit exceeded. Too many media requests.',
+      code: 'RATE_LIMIT_EXCEEDED',
+    });
+  }
+
   let targetUrl = '';
   const driveIdParam = req.query.driveId as string;
   const rawUrlParam = req.query.url as string;
 
-  if (driveIdParam && /^[a-zA-Z0-9_-]{15,}$/.test(driveIdParam.trim())) {
-    const resolved = await resolveGoogleDriveStreamUrl(driveIdParam.trim());
-    if (resolved.isPrivate) {
-      return res.status(403).json({
-        error: resolved.error,
-        code: 'GOOGLE_DRIVE_PRIVATE',
-        humanMessage:
-          'This Google Drive video is private. Open Google Drive, click Share, and select "Anyone with the link can view".',
-      });
+  // Dedicated abort controller for upstream fetching
+  const abortController = new AbortController();
+
+  // FIX: Monitor response lifecycle, NOT incoming request's close event
+  // Abort upstream ONLY when outgoing response closes prematurely (client disconnects)
+  const onResponseClose = () => {
+    if (!res.writableEnded) {
+      abortController.abort(new Error('Client disconnected prematurely'));
     }
-    if (!resolved.playableUrl) {
-      return res.status(400).json({
-        error: resolved.error || 'Could not resolve Google Drive media stream',
-        code: 'GOOGLE_DRIVE_UNRESOLVED',
-        humanMessage:
-          'Google Drive did not provide a streamable video response. Ensure the file is shared publicly as "Anyone with the link can view".',
-      });
-    }
-    targetUrl = resolved.playableUrl;
-  } else if (rawUrlParam) {
-    const driveInfo = parseGoogleDriveUrl(rawUrlParam);
-    if (driveInfo.isGoogleDrive && driveInfo.fileId) {
-      const resolved = await resolveGoogleDriveStreamUrl(driveInfo.fileId);
+  };
+  res.once('close', onResponseClose);
+
+  try {
+    if (driveIdParam && /^[a-zA-Z0-9_-]{15,}$/.test(driveIdParam.trim())) {
+      const resolved = await resolveGoogleDriveStreamUrl(
+        driveIdParam.trim(),
+        abortController.signal
+      );
       if (resolved.isPrivate) {
+        res.removeListener('close', onResponseClose);
         return res.status(403).json({
           error: resolved.error,
           code: 'GOOGLE_DRIVE_PRIVATE',
+          humanMessage:
+            'This Google Drive video is private. Open Google Drive, click Share, and select "Anyone with the link can view".',
+        });
+      }
+      if (resolved.isNotFound) {
+        res.removeListener('close', onResponseClose);
+        return res.status(404).json({
+          error: resolved.error,
+          code: 'GOOGLE_DRIVE_NOT_FOUND',
         });
       }
       if (!resolved.playableUrl) {
+        res.removeListener('close', onResponseClose);
         return res.status(400).json({
           error: resolved.error || 'Could not resolve Google Drive media stream',
+          code: 'GOOGLE_DRIVE_UNRESOLVED',
+          humanMessage:
+            'Google Drive did not provide a streamable video response. Ensure the file is shared publicly as "Anyone with the link can view".',
         });
       }
       targetUrl = resolved.playableUrl;
-    } else {
-      if (!/^https?:\/\//i.test(rawUrlParam.trim())) {
-        return res.status(400).json({ error: 'Invalid URL. Must begin with http:// or https://' });
+    } else if (rawUrlParam) {
+      const driveInfo = parseGoogleDriveUrl(rawUrlParam);
+      if (driveInfo.isGoogleDrive && driveInfo.fileId) {
+        const resolved = await resolveGoogleDriveStreamUrl(
+          driveInfo.fileId,
+          abortController.signal
+        );
+        if (resolved.isPrivate) {
+          res.removeListener('close', onResponseClose);
+          return res.status(403).json({
+            error: resolved.error,
+            code: 'GOOGLE_DRIVE_PRIVATE',
+          });
+        }
+        if (!resolved.playableUrl) {
+          res.removeListener('close', onResponseClose);
+          return res.status(400).json({
+            error: resolved.error || 'Could not resolve Google Drive media stream',
+          });
+        }
+        targetUrl = resolved.playableUrl;
+      } else {
+        // SSRF Check on raw external URL
+        const validation = await validateDestinationUrl(rawUrlParam.trim());
+        if (!validation.valid) {
+          res.removeListener('close', onResponseClose);
+          return res.status(403).json({
+            error: 'Access denied: ' + validation.error,
+            code: 'SSRF_BLOCKED',
+          });
+        }
+        targetUrl = rawUrlParam.trim();
       }
-      targetUrl = rawUrlParam.trim();
+    } else {
+      res.removeListener('close', onResponseClose);
+      return res.status(400).json({ error: 'Missing driveId or url parameter.' });
     }
-  } else {
-    return res.status(400).json({ error: 'Missing driveId or url parameter.' });
-  }
 
-  // Forward range header if present for standard seeking
-  const requestHeaders: Record<string, string> = {
-    'User-Agent':
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  };
-  if (req.headers.range) {
-    requestHeaders['Range'] = req.headers.range as string;
-  }
+    // Prepare upstream headers
+    const requestHeaders: Record<string, string> = {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    };
 
-  const abortController = new AbortController();
-  req.on('close', () => {
-    abortController.abort();
-  });
+    // Forward Range header if present (validate RFC 7233 format strictly: bytes=0-1024, bytes=1024-, bytes=-500)
+    if (req.headers.range && typeof req.headers.range === 'string') {
+      const rangeVal = req.headers.range.trim();
+      if (/^bytes=(\d+-\d*|\d*-\d+)$/.test(rangeVal)) {
+        requestHeaders['Range'] = rangeVal;
+      }
+    }
 
-  try {
-    const upstreamRes = await fetch(targetUrl, {
+    // Safe fetch with SSRF verification on every redirect hop
+    const { response: upstreamRes } = await safeFetch(targetUrl, {
       method: 'GET',
       headers: requestHeaders,
+      maxRedirects: 5,
+      timeoutMs: 10000,
       signal: abortController.signal,
     });
 
     const status = upstreamRes.status;
-    const contentType = upstreamRes.headers.get('content-type') || 'video/mp4';
+    const rawContentType = upstreamRes.headers.get('content-type') || '';
+    const cleanContentType = rawContentType.split(';')[0].trim().toLowerCase();
 
-    // If upstream returns HTML instead of media, don't pipe corrupt bytes to <video>
-    if (contentType.includes('text/html') && status !== 206) {
+    // Preserve upstream error status codes (403, 404, 416)
+    if (status === 404) {
+      res.removeListener('close', onResponseClose);
+      return res.status(404).json({ error: 'Media stream not found (HTTP 404).' });
+    }
+    if (status === 403 || status === 401) {
+      res.removeListener('close', onResponseClose);
+      return res.status(403).json({ error: 'Access denied by remote media host.' });
+    }
+    if (status === 416) {
+      res.removeListener('close', onResponseClose);
+      const contentRange = upstreamRes.headers.get('content-range');
+      if (contentRange) res.setHeader('Content-Range', contentRange);
+      return res.status(416).json({ error: 'Requested range not satisfiable.' });
+    }
+
+    // Validate that upstream content is actually media
+    // CRITICAL: Do NOT default unknown content types to video/mp4 and do NOT relabel HTML as video!
+    if (cleanContentType.includes('text/html')) {
+      res.removeListener('close', onResponseClose);
       return res.status(415).json({
         error: 'Upstream returned an HTML webpage instead of a playable video stream.',
         code: 'NOT_A_MEDIA_STREAM',
       });
     }
 
-    // Set streaming headers
+    if (!isPlayableMediaContentType(cleanContentType) && status !== 206) {
+      res.removeListener('close', onResponseClose);
+      return res.status(415).json({
+        error: `Unsupported media content-type "${cleanContentType}". Direct video streams required.`,
+        code: 'UNSUPPORTED_MEDIA_TYPE',
+      });
+    }
+
+    // Set streaming headers accurately from upstream
     res.status(status);
-    res.setHeader('Content-Type', contentType.includes('text/') ? 'video/mp4' : contentType);
+    res.setHeader('Content-Type', cleanContentType || 'application/octet-stream');
     res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('Access-Control-Allow-Origin', '*');
 
@@ -211,36 +386,82 @@ export async function handleMediaStream(req: Request, res: Response) {
     const contentLength = upstreamRes.headers.get('content-length');
     if (contentLength) res.setHeader('Content-Length', contentLength);
 
+    const etag = upstreamRes.headers.get('etag');
+    if (etag) res.setHeader('ETag', etag);
+
+    const lastModified = upstreamRes.headers.get('last-modified');
+    if (lastModified) res.setHeader('Last-Modified', lastModified);
+
     if (!upstreamRes.body) {
+      res.removeListener('close', onResponseClose);
       return res.end();
     }
 
-    // Stream response chunks using ReadableStream reader
+    // Stream response chunks with proper backpressure and lifecycle teardown
     const reader = upstreamRes.body.getReader();
-    const pump = async () => {
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) {
-            res.end();
-            break;
-          }
-          if (!res.write(value)) {
-            await new Promise<void>((resolve) => res.once('drain', resolve));
-          }
-        }
-      } catch (err: any) {
-        if (err?.name !== 'AbortError') {
-          res.end();
-        }
-      }
+    let isStreamDone = false;
+
+    const cleanup = () => {
+      isStreamDone = true;
+      res.removeListener('close', onResponseClose);
+      reader.cancel().catch(() => {});
     };
 
-    pump();
+    try {
+      while (!isStreamDone) {
+        if (res.writableEnded || res.destroyed || abortController.signal.aborted) {
+          break;
+        }
+
+        const { done, value } = await reader.read();
+        if (done) {
+          isStreamDone = true;
+          if (!res.writableEnded && !res.destroyed) {
+            res.end();
+          }
+          break;
+        }
+
+        if (res.writableEnded || res.destroyed) {
+          break;
+        }
+
+        // Apply backpressure
+        const canWriteMore = res.write(value);
+        if (!canWriteMore && !res.writableEnded && !res.destroyed) {
+          await new Promise<void>((resolve) => {
+            const onDrain = () => {
+              res.removeListener('close', onDrainClose);
+              resolve();
+            };
+            const onDrainClose = () => {
+              res.removeListener('drain', onDrain);
+              resolve();
+            };
+            res.once('drain', onDrain);
+            res.once('close', onDrainClose);
+          });
+        }
+      }
+    } catch (err: any) {
+      if (err?.name !== 'AbortError' && !res.writableEnded && !res.destroyed) {
+        res.end();
+      }
+    } finally {
+      cleanup();
+    }
   } catch (err: any) {
+    res.removeListener('close', onResponseClose);
     if (err?.name === 'AbortError') return;
+
     if (!res.headersSent) {
-      res.status(502).json({ error: 'Failed to stream media from remote host: ' + err.message });
+      const isSsrf = err?.message?.includes('SSRF Blocked');
+      res.status(isSsrf ? 403 : 502).json({
+        error: isSsrf
+          ? 'Destination address or provider is restricted.'
+          : 'Failed to stream media from remote host.',
+        code: isSsrf ? 'SSRF_BLOCKED' : 'UPSTREAM_FETCH_FAILED',
+      });
     }
   }
 }
@@ -248,8 +469,20 @@ export async function handleMediaStream(req: Request, res: Response) {
 /**
  * GET /api/media/inspect
  * Lightweight endpoint that tests a URL without downloading the whole media.
+ * Uses identical SSRF, provider, and destination security rules as handleMediaStream.
  */
 export async function handleMediaInspect(req: Request, res: Response) {
+  // Rate limiting check
+  const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+  if (!mediaProxyRateLimiter.isAllowed(clientIp)) {
+    return res.status(429).json({
+      ok: false,
+      status: 429,
+      errorReason: 'RATE_LIMIT_EXCEEDED',
+      humanMessage: 'Rate limit exceeded. Too many media inspections.',
+    });
+  }
+
   const urlParam = req.query.url as string;
   const driveIdParam = req.query.driveId as string;
 
@@ -268,6 +501,7 @@ export async function handleMediaInspect(req: Request, res: Response) {
     }
   }
 
+  // 1. Google Drive Inspection
   if (isGoogleDrive && fileId) {
     const resolved = await resolveGoogleDriveStreamUrl(fileId);
     if (resolved.isPrivate) {
@@ -279,6 +513,26 @@ export async function handleMediaInspect(req: Request, res: Response) {
         errorReason: 'GOOGLE_DRIVE_PRIVATE',
         humanMessage:
           'Google Drive file is private or requires authorization. Set General Access to "Anyone with the link can view".',
+      });
+    }
+    if (resolved.isNotFound) {
+      return res.json({
+        ok: false,
+        status: 404,
+        isGoogleDrive: true,
+        driveFileId: fileId,
+        errorReason: 'NOT_FOUND',
+        humanMessage: 'Google Drive file was not found (HTTP 404).',
+      });
+    }
+    if (resolved.isQuotaExceeded) {
+      return res.json({
+        ok: false,
+        status: 429,
+        isGoogleDrive: true,
+        driveFileId: fileId,
+        errorReason: 'QUOTA_EXCEEDED',
+        humanMessage: 'Google Drive download quota exceeded for this file.',
       });
     }
     if (resolved.isHtml) {
@@ -302,44 +556,48 @@ export async function handleMediaInspect(req: Request, res: Response) {
     });
   }
 
-  // Generic URL inspection
+  // 2. Generic URL Inspection with strict SSRF validation
   const targetUrl = urlParam || '';
-  if (!targetUrl || !/^https?:\/\//i.test(targetUrl)) {
-    return res.status(400).json({ ok: false, error: 'URL must begin with http:// or https://' });
+
+  // SSRF Destination Check
+  const validation = await validateDestinationUrl(targetUrl);
+  if (!validation.valid) {
+    return res.status(403).json({
+      ok: false,
+      status: 403,
+      errorReason: 'UNSUPPORTED_PROVIDER',
+      humanMessage: 'Destination address or provider is restricted: ' + validation.error,
+    });
   }
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
-
-    const upstream = await fetch(targetUrl, {
+    // Lightweight range request to inspect headers without downloading full payload
+    const { response: upstream } = await safeFetch(targetUrl, {
       method: 'GET',
       headers: {
         Range: 'bytes=0-1024',
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       },
-      signal: controller.signal,
+      maxRedirects: 5,
+      timeoutMs: 6000,
     });
-    clearTimeout(timeout);
 
     const status = upstream.status;
-    const contentType = upstream.headers.get('content-type') || '';
+    const rawContentType = upstream.headers.get('content-type') || '';
+    const cleanContentType = rawContentType.split(';')[0].trim().toLowerCase();
     const contentLength = upstream.headers.get('content-length')
       ? parseInt(upstream.headers.get('content-length')!, 10)
       : undefined;
 
-    const isMedia =
-      contentType.startsWith('video/') ||
-      contentType.startsWith('audio/') ||
-      contentType.includes('octet-stream');
-    const isHtml = contentType.includes('text/html');
+    const isMedia = isPlayableMediaContentType(cleanContentType);
+    const isHtml = cleanContentType.includes('text/html');
 
     if (isHtml) {
       return res.json({
         ok: false,
         status,
-        contentType,
+        contentType: cleanContentType,
         isMedia: false,
         isHtml: true,
         errorReason: 'HTML_NOT_MEDIA',
@@ -347,32 +605,61 @@ export async function handleMediaInspect(req: Request, res: Response) {
       });
     }
 
-    if (status >= 400) {
+    if (status === 401 || status === 403) {
       return res.json({
         ok: false,
         status,
-        contentType,
-        isMedia,
-        errorReason: status === 403 || status === 401 ? 'ACCESS_DENIED' : 'HTTP_ERROR',
-        humanMessage: `Remote server returned HTTP ${status}.`,
+        contentType: cleanContentType,
+        isMedia: false,
+        errorReason: 'ACCESS_DENIED',
+        humanMessage: 'Access denied: Authentication or permissions required by remote host.',
+      });
+    }
+
+    if (status === 404) {
+      return res.json({
+        ok: false,
+        status,
+        contentType: cleanContentType,
+        isMedia: false,
+        errorReason: 'NOT_FOUND',
+        humanMessage: 'Remote media file was not found (HTTP 404).',
+      });
+    }
+
+    if (!isMedia && status !== 206) {
+      return res.json({
+        ok: false,
+        status,
+        contentType: cleanContentType,
+        isMedia: false,
+        errorReason: 'UNSUPPORTED_MEDIA_FORMAT',
+        humanMessage: `Unsupported content-type "${cleanContentType}". Stream must be a direct video/audio file.`,
       });
     }
 
     return res.json({
       ok: true,
       status,
-      contentType,
+      contentType: cleanContentType,
       contentLength,
-      isMedia,
+      isMedia: true,
       isHtml: false,
       humanMessage: 'Direct playable media stream verified.',
     });
   } catch (err: any) {
+    const isTimeout =
+      err?.name === 'AbortError' ||
+      err?.message?.includes('timed out') ||
+      err?.message?.includes('timeout');
+
     return res.json({
       ok: false,
-      status: 0,
-      errorReason: 'NETWORK_TIMEOUT',
-      humanMessage: 'Could not connect to media server: ' + (err?.message || 'Request timed out'),
+      status: isTimeout ? 504 : 0,
+      errorReason: isTimeout ? 'NETWORK_TIMEOUT' : 'NETWORK_ERROR',
+      humanMessage: isTimeout
+        ? 'Connection to remote media host timed out.'
+        : 'Could not connect to media server: ' + (err?.message || 'Network error'),
     });
   }
 }

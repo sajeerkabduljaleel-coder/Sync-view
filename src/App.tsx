@@ -17,6 +17,7 @@ import { ReactionWizard } from './components/reactor/ReactionWizard';
 import { CreatorStudio } from './components/reactor/CreatorStudio';
 import { Theatre } from './components/theatre/Theatre';
 import { AuthModal } from './components/auth/AuthModal';
+import { AlertCircle, RefreshCw, Play, X } from 'lucide-react';
 
 export default function App() {
   // Mode persistence (Viewer vs Reactor)
@@ -47,6 +48,14 @@ export default function App() {
     hostToken?: string;
     participantToken?: string;
   } | null>(null);
+
+  // Watch party creation error state (for actionable retry / private viewing)
+  const [partyCreationError, setPartyCreationError] = useState<{
+    message: string;
+    source: VideoSource;
+    reaction: ReactionVideo;
+  } | null>(null);
+  const [isCreatingParty, setIsCreatingParty] = useState(false);
 
   // Active reaction for Creator Studio calibration
   const [activeStudioReaction, setActiveStudioReaction] = useState<ReactionVideo | null>(null);
@@ -153,6 +162,8 @@ export default function App() {
   };
 
   const handleCreateParty = async (source: VideoSource, reaction: ReactionVideo) => {
+    setIsCreatingParty(true);
+    setPartyCreationError(null);
     const hostName = currentUser ? currentUser.name : 'Host';
     try {
       const res = await fetch('/api/parties', {
@@ -171,26 +182,32 @@ export default function App() {
           active: true,
           source,
           primaryReaction: reaction,
-          extraReactions: data.room.additionalReactions || [],
+          extraReactions: data.room?.additionalReactions || [],
           isHost: true,
-          roomCode: data.room.roomCode,
+          roomCode: data.room?.roomCode,
           hostToken: data.hostToken,
           participantToken: data.participantToken,
         });
         return;
       }
-    } catch {}
-
-    // Fallback local party code
-    const mockCode = 'SYNC99';
-    setTheatreState({
-      active: true,
-      source,
-      primaryReaction: reaction,
-      extraReactions: reactions.filter((r) => r.sourceId === source.id && r.id !== reaction.id).slice(0, 2),
-      isHost: true,
-      roomCode: mockCode,
-    });
+      const errData = await res.json().catch(() => ({}));
+      const errorMsg =
+        errData.error || `Unable to establish watch party room on server (HTTP ${res.status}).`;
+      setPartyCreationError({
+        message: errorMsg,
+        source,
+        reaction,
+      });
+    } catch (err: any) {
+      setPartyCreationError({
+        message:
+          err?.message || 'Network connection failed while attempting to create watch party.',
+        source,
+        reaction,
+      });
+    } finally {
+      setIsCreatingParty(false);
+    }
   };
 
   const handleSaveCalibratedReaction = async (updated: ReactionVideo) => {
@@ -361,6 +378,74 @@ export default function App() {
           setCurrentUser(user);
         }}
       />
+
+      {/* Watch Party Creation Error Modal */}
+      {partyCreationError && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-zinc-900 border border-zinc-700/80 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400">
+                  <AlertCircle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Party Creation Failed</h3>
+                  <p className="text-xs text-zinc-400">Server could not initialize synchronized room</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setPartyCreationError(null)}
+                className="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800 text-sm text-zinc-300">
+              <p className="font-medium text-red-300 mb-1">Reason:</p>
+              <p className="text-xs text-zinc-400 leading-relaxed">{partyCreationError.message}</p>
+            </div>
+
+            <div className="text-xs text-zinc-400 bg-zinc-800/40 p-3 rounded-lg border border-zinc-800">
+              <span className="text-zinc-300 font-semibold">Preserved Selection:</span>{' '}
+              {partyCreationError.source.title} + {partyCreationError.reaction.creator}&apos;s reaction
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+              <button
+                onClick={() => {
+                  const { source, reaction } = partyCreationError;
+                  handleCreateParty(source, reaction);
+                }}
+                disabled={isCreatingParty}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition"
+              >
+                <RefreshCw className={`w-4 h-4 ${isCreatingParty ? 'animate-spin' : ''}`} />
+                Retry Room Creation
+              </button>
+
+              <button
+                onClick={() => {
+                  const { source, reaction } = partyCreationError;
+                  setTheatreState({
+                    active: true,
+                    source,
+                    primaryReaction: reaction,
+                    extraReactions: [],
+                    isHost: false,
+                    roomCode: undefined,
+                  });
+                  setPartyCreationError(null);
+                }}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm font-medium rounded-xl transition"
+              >
+                <Play className="w-4 h-4 text-emerald-400" />
+                Watch Privately
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
