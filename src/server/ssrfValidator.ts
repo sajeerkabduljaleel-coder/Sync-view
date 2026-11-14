@@ -5,6 +5,9 @@
 
 import net from 'net';
 import dns from 'dns';
+import http from 'http';
+import https from 'https';
+import { Readable } from 'stream';
 
 export interface DestinationValidationResult {
   valid: boolean;
@@ -310,6 +313,80 @@ export async function validateDestinationUrl(urlStr: string): Promise<Destinatio
 }
 
 /**
+ * Socket-level DNS lookup callback used by http.Agent and https.Agent to eliminate
+ * the validation-to-connection gap and prevent DNS rebinding attacks.
+ * Invoked immediately by the TCP/TLS connection layer before socket connect.
+ */
+export function ssrfGuardedLookup(
+  hostname: string,
+  options: any,
+  callback: (err: Error | null, address?: any, family?: number) => void
+): void {
+  // 1. Direct IP check
+  if (net.isIP(hostname)) {
+    if (isDisallowedIp(hostname)) {
+      return callback(new Error('SSRF Blocked: Destination IP is disallowed'));
+    }
+    if (options && options.all) {
+      return callback(null, [{ address: hostname, family: net.isIP(hostname) }]);
+    }
+    return callback(null, hostname, net.isIP(hostname));
+  }
+
+  // 2. Obfuscated format check
+  if (containsObfuscatedIpFormat(hostname)) {
+    return callback(new Error('SSRF Blocked: Obfuscated IP format'));
+  }
+
+  // 3. Resolve all addresses at connect time
+  dns.lookup(hostname, { ...options, all: true } as any, (err: any, addresses: any) => {
+    if (err) return callback(err);
+    if (!addresses || addresses.length === 0) {
+      return callback(new Error('DNS resolution returned no addresses'));
+    }
+
+    // 4. If ANY address is disallowed, reject the ENTIRE result (prevents mixed DNS rebinding)
+    for (const entry of addresses) {
+      const ip = typeof entry === 'string' ? entry : entry.address;
+      if (isDisallowedIp(ip)) {
+        return callback(
+          new Error('SSRF Blocked: Prohibited destination IP in DNS result')
+        );
+      }
+    }
+
+    // 5. Pass validated addresses to socket connection
+    if (options && options.all) {
+      callback(null, addresses);
+    } else {
+      const first = addresses[0];
+      if (typeof first === 'string') {
+        callback(null, first, 4);
+      } else {
+        callback(null, first.address, first.family);
+      }
+    }
+  });
+}
+
+/**
+ * Dedicated, connection-time SSRF-guarded HTTP and HTTPS agents.
+ * All outgoing socket connections resolve DNS through ssrfGuardedLookup,
+ * guaranteeing no connection is ever established to prohibited IP ranges.
+ */
+export const ssrfHttpsAgent = new https.Agent({
+  keepAlive: true,
+  timeout: 10000,
+  lookup: ssrfGuardedLookup,
+});
+
+export const ssrfHttpAgent = new http.Agent({
+  keepAlive: true,
+  timeout: 10000,
+  lookup: ssrfGuardedLookup,
+});
+
+/**
  * In-memory sliding window rate limiter for media streaming & inspection requests.
  * Protects proxy endpoints from denial-of-service and brute-force scans.
  */
@@ -373,8 +450,49 @@ export interface SafeFetchResponse {
 }
 
 /**
+ * Performs a single HTTP/HTTPS request using connection-level SSRF agents.
+ */
+function makeGuardedRequest(
+  urlStr: string,
+  options: SafeFetchOptions
+): Promise<{ res: http.IncomingMessage; finalUrl: string }> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(urlStr);
+    const isHttps = parsed.protocol === 'https:';
+    const client = isHttps ? https : http;
+    const agent = isHttps ? ssrfHttpsAgent : ssrfHttpAgent;
+
+    const req = client.request(
+      urlStr,
+      {
+        method: options.method || 'GET',
+        headers: options.headers || {},
+        agent,
+        signal: options.signal,
+      },
+      (res) => {
+        resolve({ res, finalUrl: urlStr });
+      }
+    );
+
+    if (options.timeoutMs) {
+      req.setTimeout(options.timeoutMs, () => {
+        req.destroy(new Error('Connection timed out'));
+      });
+    }
+
+    req.on('error', (err) => {
+      reject(err);
+    });
+
+    req.end();
+  });
+}
+
+/**
  * Fetches an external media resource while strictly validating every hop (including redirects)
  * against SSRF, private IP, redirect loops, and cloud metadata restrictions.
+ * Enforces connection-level DNS validation to eliminate DNS rebinding race conditions.
  */
 export async function safeFetch(
   initialUrl: string,
@@ -387,49 +505,36 @@ export async function safeFetch(
   const visitedUrls = new Set<string>([initialUrl]);
 
   while (redirectCount <= maxRedirects) {
-    // 1. Validate the current destination URL and resolved IPs before connecting
+    // 1. Pre-flight URL and syntax validation
     const validation = await validateDestinationUrl(currentUrl);
     if (!validation.valid) {
       throw new Error(`SSRF Blocked: ${validation.error}`);
     }
 
-    const abortController = new AbortController();
-    const timeoutTimer = setTimeout(() => {
-      abortController.abort(new Error('Connection timed out'));
-    }, timeoutMs);
-
-    // If caller provided an external signal, propagate it
-    const externalSignal = options.signal;
-    const onExternalAbort = () => abortController.abort(externalSignal?.reason);
-    if (externalSignal) {
-      if (externalSignal.aborted) {
-        clearTimeout(timeoutTimer);
-        abortController.abort(externalSignal.reason);
-      } else {
-        externalSignal.addEventListener('abort', onExternalAbort, { once: true });
-      }
-    }
-
     try {
-      const res = await fetch(currentUrl, {
+      const { res } = await makeGuardedRequest(currentUrl, {
         method: options.method || 'GET',
         headers: options.headers || {},
-        redirect: 'manual', // Strictly manual redirect handling to intercept and validate each hop
-        signal: abortController.signal,
+        signal: options.signal,
+        timeoutMs,
       });
 
-      clearTimeout(timeoutTimer);
-      if (externalSignal) {
-        externalSignal.removeEventListener('abort', onExternalAbort);
-      }
+      const status = res.statusCode || 200;
 
-      // Check for redirect status
-      const status = res.status;
+      // Handle redirect status codes
       if (status >= 300 && status < 400) {
-        const location = res.headers.get('location');
+        const location = res.headers.location;
         if (!location) {
-          return { response: res, finalUrl: currentUrl };
+          const webRes = new Response(Readable.toWeb(res) as any, {
+            status,
+            statusText: res.statusMessage || 'Redirect',
+            headers: res.headers as any,
+          });
+          return { response: webRes, finalUrl: currentUrl };
         }
+
+        // Consume remaining response stream to release socket
+        res.resume();
 
         // Resolve relative redirects against current URL
         const nextUrl = new URL(location, currentUrl).toString();
@@ -449,12 +554,15 @@ export async function safeFetch(
         continue;
       }
 
-      return { response: res, finalUrl: currentUrl };
+      // Convert IncomingMessage to a WHATWG Web Response
+      const webRes = new Response(Readable.toWeb(res) as any, {
+        status,
+        statusText: res.statusMessage || 'OK',
+        headers: res.headers as any,
+      });
+
+      return { response: webRes, finalUrl: currentUrl };
     } catch (err: any) {
-      clearTimeout(timeoutTimer);
-      if (externalSignal) {
-        externalSignal.removeEventListener('abort', onExternalAbort);
-      }
       throw err;
     }
   }

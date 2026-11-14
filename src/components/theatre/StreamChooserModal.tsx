@@ -33,6 +33,7 @@ import {
   validateUrlInput,
   resolvePlayableMediaUrl,
 } from '../../services/mediaResolver';
+import { detectMediaProvider } from '../../services/mediaProviders/mediaProviderRegistry';
 
 interface StreamChooserModalProps {
   isOpen: boolean;
@@ -681,14 +682,28 @@ export function StreamChooserModal({
                           type="url"
                           value={sourceUrl}
                           onChange={(e) => setSourceUrl(e.target.value)}
-                          placeholder="https://example.com/source-video.mp4 or Google Drive link"
+                          placeholder="https://example.com/source-video.mp4, YouTube, or Google Drive link"
                           className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
                         />
-                        {isGoogleDriveUrl(sourceUrl) && (
-                          <div className="text-[10px] text-indigo-400 mt-1 flex items-center gap-1">
-                            <span>Google Drive link detected &bull; Must be shared as &quot;Anyone with the link can view&quot;</span>
-                          </div>
-                        )}
+                        {sourceUrl.trim() && (() => {
+                          const info = detectMediaProvider(sourceUrl);
+                          return (
+                            <div className="text-[10px] mt-1.5 flex items-center gap-1.5 font-medium">
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                                info.provider === 'youtube'
+                                  ? 'bg-red-500/20 text-red-300 border border-red-500/30'
+                                  : info.provider === 'google_drive'
+                                  ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                                  : info.provider === 'patreon'
+                                  ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
+                                  : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                              }`}>
+                                {info.name}
+                              </span>
+                              <span className="text-slate-400">{info.badgeText}</span>
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div>
                         <label className="text-[11px] font-semibold text-slate-300 block mb-1">
@@ -890,14 +905,28 @@ export function StreamChooserModal({
                         type="url"
                         value={reactionUrl}
                         onChange={(e) => setReactionUrl(e.target.value)}
-                        placeholder="https://example.com/reactor-video.mp4 or Google Drive link"
+                        placeholder="https://example.com/reactor-video.mp4, YouTube, Drive, or Patreon link"
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-purple-500"
                       />
-                      {isGoogleDriveUrl(reactionUrl) && (
-                        <div className="text-[10px] text-purple-400 mt-1 flex items-center gap-1">
-                          <span>Google Drive link detected &bull; Must be shared as &quot;Anyone with the link can view&quot;</span>
-                        </div>
-                      )}
+                      {reactionUrl.trim() && (() => {
+                        const info = detectMediaProvider(reactionUrl);
+                        return (
+                          <div className="text-[10px] mt-1.5 flex items-center gap-1.5 font-medium">
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                              info.provider === 'youtube'
+                                ? 'bg-red-500/20 text-red-300 border border-red-500/30'
+                                : info.provider === 'google_drive'
+                                ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                                : info.provider === 'patreon'
+                                ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
+                                : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                            }`}>
+                              {info.name}
+                            </span>
+                            <span className="text-slate-400">{info.badgeText}</span>
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div>
                       <label className="text-[11px] font-semibold text-slate-300 block mb-1">

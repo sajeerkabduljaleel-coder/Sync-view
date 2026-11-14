@@ -366,7 +366,7 @@ export async function handleMediaStream(req: Request, res: Response) {
       });
     }
 
-    if (!isPlayableMediaContentType(cleanContentType) && status !== 206) {
+    if (!isPlayableMediaContentType(cleanContentType)) {
       res.removeListener('close', onResponseClose);
       return res.status(415).json({
         error: `Unsupported media content-type "${cleanContentType}". Direct video streams required.`,
@@ -627,7 +627,7 @@ export async function handleMediaInspect(req: Request, res: Response) {
       });
     }
 
-    if (!isMedia && status !== 206) {
+    if (!isMedia) {
       return res.json({
         ok: false,
         status,

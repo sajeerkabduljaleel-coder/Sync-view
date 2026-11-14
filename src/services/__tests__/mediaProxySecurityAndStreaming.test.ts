@@ -15,6 +15,7 @@ import {
   validateDestinationUrl,
   safeFetch,
   SimpleRateLimiter,
+  ssrfGuardedLookup,
 } from '../../server/ssrfValidator';
 import { isPlayableMediaContentType } from '../../server/mediaStreamProxy';
 
@@ -420,3 +421,51 @@ test('googleDriveHandling: detects private login redirects and confirmation toke
   const isPrivate = privateHtml.includes('You need access') || privateHtml.includes('Sign in');
   assert.equal(isPrivate, true);
 });
+
+// ---------------------------------------------------------------------------
+// 11. Connection-Level DNS Rebinding & Mixed DNS Defenses
+// ---------------------------------------------------------------------------
+
+test('ssrfGuardedLookup: rejects mixed DNS responses containing both public and private addresses', (t, done) => {
+  const originalLookup = dns.lookup;
+  (dns as any).lookup = (hostname: string, options: any, cb: any) => {
+    // Simulate DNS returning both a public IP and a private loopback IP
+    cb(null, [
+      { address: '93.184.216.34', family: 4 },
+      { address: '127.0.0.1', family: 4 },
+    ]);
+  };
+
+  ssrfGuardedLookup('mixed-dns.example.com', { all: true }, (err, addresses) => {
+    (dns as any).lookup = originalLookup;
+    assert.ok(err, 'Expected error for mixed DNS responses containing private IPs');
+    assert.match(err?.message || '', /Prohibited destination IP in DNS result/i);
+    done();
+  });
+});
+
+test('ssrfGuardedLookup: blocks connection-time DNS rebinding to loopback and cloud metadata', (t, done) => {
+  const originalLookup = dns.lookup;
+  (dns as any).lookup = (hostname: string, options: any, cb: any) => {
+    // Simulate rebinding to IMDS at connect-time
+    cb(null, [{ address: '169.254.169.254', family: 4 }]);
+  };
+
+  ssrfGuardedLookup('rebind-at-connect.example.com', { all: true }, (err, addresses) => {
+    (dns as any).lookup = originalLookup;
+    assert.ok(err, 'Expected error for rebinding to cloud metadata');
+    assert.match(err?.message || '', /Prohibited destination IP in DNS result/i);
+    done();
+  });
+});
+
+test('mediaStreamProxy: rejects non-media responses even when status is 206 Partial Content', () => {
+  // If upstream returns 206 with non-media MIME, isPlayableMediaContentType must reject it
+  assert.equal(isPlayableMediaContentType('text/html'), false);
+  assert.equal(isPlayableMediaContentType('application/json'), false);
+  assert.equal(isPlayableMediaContentType('text/plain'), false);
+  assert.equal(isPlayableMediaContentType('image/svg+xml'), false);
+  assert.equal(isPlayableMediaContentType('video/mp4'), true);
+  assert.equal(isPlayableMediaContentType('video/webm'), true);
+});
+

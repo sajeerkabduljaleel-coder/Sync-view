@@ -36,6 +36,7 @@ import {
   Folder,
   FileVideo,
   Globe,
+  Lock,
 } from 'lucide-react';
 import {
   VideoSource,
@@ -57,6 +58,11 @@ import {
   validateUrlInput,
   resolvePlayableMediaUrl,
 } from '../../services/mediaResolver';
+import {
+  detectMediaProvider,
+  computeSessionSyncCapability,
+} from '../../services/mediaProviders/mediaProviderRegistry';
+import { SyncCapability } from '../../services/mediaProviders/types';
 
 function formatBytes(bytes: number | null | undefined): string {
   if (!bytes || bytes <= 0) return '0 B';
@@ -158,6 +164,42 @@ export function Theatre({
 
   // Floating emoji reaction bursts
   const [emojiBursts, setEmojiBursts] = useState<{ id: number; emoji: string; x: number }[]>([]);
+
+  // Countdown cue state for manual sync coordination (e.g. Patreon)
+  const [countdownCount, setCountdownCount] = useState<number | null>(null);
+  const isCountingDown = countdownCount !== null;
+
+  // Compute session-level sync capability across all active media streams
+  const sessionCapability = React.useMemo(() => {
+    const caps: SyncCapability[] = [];
+    if (sourceVideo?.url) {
+      caps.push(detectMediaProvider(sourceVideo.url, sourceVideo.isLocalFile).syncCapability);
+    }
+    if (primaryReaction?.url) {
+      caps.push(detectMediaProvider(primaryReaction.url, primaryReaction.isLocalFile).syncCapability);
+    }
+    extraReactions.forEach((rx) => {
+      if (rx.url) {
+        caps.push(detectMediaProvider(rx.url, rx.isLocalFile).syncCapability);
+      }
+    });
+    return computeSessionSyncCapability(caps);
+  }, [sourceVideo, primaryReaction, extraReactions]);
+
+  const handleStartCountdownCue = () => {
+    if (isCountingDown) return;
+    setCountdownCount(3);
+    const interval = setInterval(() => {
+      setCountdownCount((prev) => {
+        if (prev === null || prev <= 1) {
+          clearInterval(interval);
+          controllerRef.current?.play();
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
   // Sync state if props change from outside
   useEffect(() => {
@@ -1100,6 +1142,43 @@ export function Theatre({
             </div>
           </div>
 
+          {/* Manual Sync Coordination Banner */}
+          {sessionCapability.capability === 'manual_sync' && (
+            <div className="bg-amber-950/40 border border-amber-500/40 rounded-xl p-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs shadow-lg">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 font-semibold text-amber-200">
+                    <span>Manual Synchronisation Active</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">
+                      Target Reaction Cue:{' '}
+                      {formatTime(
+                        syncState?.primaryMetrics
+                          ? syncState.sourceTime + (primaryReaction.introDuration || 0)
+                          : syncState?.sourceTime || 0
+                      )}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-amber-300/80 mt-0.5">
+                    External playback is active (e.g. Patreon). Use the countdown cue to synchronize with the external stream.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={handleStartCountdownCue}
+                  disabled={isCountingDown}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold transition-colors disabled:opacity-50 cursor-pointer shadow-md"
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>{isCountingDown ? `Cue: ${countdownCount}...` : '3-2-1 Sync Cue'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Video Grid based on layout */}
           <div
             className={`w-full flex-1 min-h-[420px] gap-3 ${
@@ -1135,6 +1214,7 @@ export function Theatre({
                 isLocalFile={sourceVideo.isLocalFile}
                 isMuted={syncState?.audioFocus !== 'source' && !syncState?.isDuckingEnabled}
                 syncStatus="Master"
+                targetTimestamp={syncState?.sourceTime || 0}
                 onTogglePlay={handlePlayToggle}
                 onTogglePip={() => controllerRef.current?.togglePictureInPicture()}
                 ref={(inst) => {
@@ -1169,6 +1249,11 @@ export function Theatre({
                 isMuted={syncState?.audioFocus !== primaryReaction.id}
                 syncStatus={primaryStatus}
                 playbackRate={syncState?.primaryMetrics?.playbackRate || 1.0}
+                targetTimestamp={
+                  syncState?.primaryMetrics
+                    ? syncState.sourceTime + (primaryReaction.introDuration || 0)
+                    : syncState?.sourceTime || 0
+                }
                 onTogglePlay={handlePlayToggle}
                 onTogglePip={() => controllerRef.current?.togglePictureInPicture()}
                 ref={(inst) => {
@@ -1194,6 +1279,7 @@ export function Theatre({
                   isMuted={syncState?.audioFocus !== rx.id}
                   syncStatus={syncState?.extraReactorMetrics[rx.id]?.status || 'synced'}
                   playbackRate={syncState?.extraReactorMetrics[rx.id]?.playbackRate || 1.0}
+                  targetTimestamp={(syncState?.sourceTime || 0) + (rx.introDuration || 0)}
                   onTogglePlay={handlePlayToggle}
                   ref={(inst) => {
                     if (inst)

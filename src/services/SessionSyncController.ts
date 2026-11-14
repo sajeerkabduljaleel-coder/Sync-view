@@ -18,6 +18,7 @@ import {
   DEFAULT_DRIFT_CONFIG,
   DriftConfig,
 } from './syncEngine';
+import { MediaPlayerElement } from './mediaProviders/types';
 
 export type SyncEventListener = (state: SessionSyncState) => void;
 
@@ -40,11 +41,12 @@ export interface SessionSyncState {
 
 /**
  * Authoritative client-side synchronization controller for Theatre.
- * Manages playback, drift correction loops, audio focus, and layout.
+ * Manages playback, drift correction loops, audio focus, and layout
+ * across native HTML5 video and external player adapters.
  */
 export class SessionSyncController {
-  private sourceElement: HTMLVideoElement | null = null;
-  private reactionElements: Map<string, HTMLVideoElement> = new Map();
+  private sourceElement: MediaPlayerElement | HTMLVideoElement | null = null;
+  private reactionElements: Map<string, MediaPlayerElement | HTMLVideoElement> = new Map();
   private reactionAnchors: Map<string, SyncAnchor[]> = new Map();
 
   private listeners: Set<SyncEventListener> = new Set();
@@ -81,14 +83,17 @@ export class SessionSyncController {
     this.startSyncLoop();
   }
 
-  public registerSourceElement(el: HTMLVideoElement | null): void {
+  public registerSourceElement(el: MediaPlayerElement | HTMLVideoElement | null): void {
     this.sourceElement = el;
     if (el) {
       el.playbackRate = 1.0;
     }
   }
 
-  public registerReactionElement(reactionId: string, el: HTMLVideoElement | null): void {
+  public registerReactionElement(
+    reactionId: string,
+    el: MediaPlayerElement | HTMLVideoElement | null
+  ): void {
     if (el) {
       this.reactionElements.set(reactionId, el);
     } else {
@@ -136,7 +141,7 @@ export class SessionSyncController {
     const promises: Promise<any>[] = [];
 
     if (this.sourceElement && this.sourceElement.paused && !this.sourceElement.error) {
-      promises.push(this.sourceElement.play().catch(() => {}));
+      promises.push(Promise.resolve(this.sourceElement.play()).catch(() => {}));
     }
 
     for (const [id, el] of this.reactionElements.entries()) {
@@ -149,7 +154,7 @@ export class SessionSyncController {
             el.currentTime = Math.max(0, target);
           } catch {}
         }
-        promises.push(el.play().catch(() => {}));
+        promises.push(Promise.resolve(el.play()).catch(() => {}));
       }
     }
 

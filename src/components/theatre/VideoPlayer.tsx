@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useRef, useEffect, useState, forwardRef, useImperativeHandle, useCallback } from 'react';
+import React, { useRef, useEffect, useState, forwardRef, useImperativeHandle, useCallback, useMemo } from 'react';
 import {
   Volume2,
   VolumeX,
@@ -18,6 +18,8 @@ import {
   Info,
   CheckCircle2,
   Loader2,
+  HardDrive,
+  ExternalLink,
 } from 'lucide-react';
 import {
   resolvePlayableMediaUrl,
@@ -26,6 +28,11 @@ import {
   isGoogleDriveUrl,
   inspectMediaUrl,
 } from '../../services/mediaResolver';
+import { MediaPlayerElement } from '../../services/mediaProviders/types';
+import { detectMediaProvider } from '../../services/mediaProviders/mediaProviderRegistry';
+import { YouTubePlayer } from './players/YouTubePlayer';
+import { GoogleDriveEmbedPlayer } from './players/GoogleDriveEmbedPlayer';
+import { PatreonExternalPlayer } from './players/PatreonExternalPlayer';
 
 interface VideoPlayerProps {
   id: string;
@@ -41,6 +48,7 @@ interface VideoPlayerProps {
   volume?: number;
   syncStatus?: string;
   playbackRate?: number;
+  targetTimestamp?: number;
   onTimeUpdate?: (currentTime: number) => void;
   onTogglePlay?: () => void;
   onToggleMute?: () => void;
@@ -51,7 +59,7 @@ interface VideoPlayerProps {
 }
 
 export interface VideoPlayerRef {
-  getElement: () => HTMLVideoElement | null;
+  getElement: () => MediaPlayerElement | HTMLVideoElement | null;
   seek: (time: number) => void;
   retry: () => void;
 }
@@ -71,6 +79,7 @@ export const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(function
     volume = 1.0,
     syncStatus = 'synced',
     playbackRate = 1.0,
+    targetTimestamp,
     onTimeUpdate,
     onTogglePlay,
     onToggleMute,
@@ -83,6 +92,13 @@ export const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(function
 ) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const youtubePlayerRef = useRef<MediaPlayerElement | null>(null);
+  const driveEmbedRef = useRef<MediaPlayerElement | null>(null);
+  const patreonPlayerRef = useRef<MediaPlayerElement | null>(null);
+
+  // Provider detection & capabilities
+  const providerInfo = useMemo(() => detectMediaProvider(src || '', isLocalFile), [src, isLocalFile]);
+  const [forceDriveEmbed, setForceDriveEmbed] = useState(false);
 
   // Resolved media URL (e.g. Google Drive resolved to /api/media/stream?driveId=...)
   const resolvedSrc = src ? resolvePlayableMediaUrl(src) : '';
@@ -108,11 +124,19 @@ export const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(function
     setErrorInfo(null);
     setServerInspectResult(null);
     setIsRetrying(false);
+    setForceDriveEmbed(false);
     onErrorStateChange?.(false);
   }, [src]);
 
   // Handle Retry action
   const handleRetry = useCallback(() => {
+    if (providerInfo.provider === 'youtube') {
+      setHasError(false);
+      setErrorInfo(null);
+      onErrorStateChange?.(false);
+      return;
+    }
+
     const video = videoRef.current;
     if (!video) return;
 
@@ -131,13 +155,35 @@ export const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(function
     setTimeout(() => {
       setIsRetrying(false);
     }, 1200);
-  }, [currentTime, onErrorStateChange]);
+  }, [currentTime, onErrorStateChange, providerInfo.provider]);
 
   useImperativeHandle(ref, () => ({
-    getElement: () => videoRef.current,
+    getElement: () => {
+      if (providerInfo.provider === 'youtube') {
+        return youtubePlayerRef.current;
+      }
+      if (providerInfo.provider === 'patreon') {
+        return patreonPlayerRef.current;
+      }
+      if (forceDriveEmbed && providerInfo.fileId) {
+        return driveEmbedRef.current;
+      }
+      return videoRef.current;
+    },
     seek: (time: number) => {
+      if (providerInfo.provider === 'youtube' && youtubePlayerRef.current) {
+        youtubePlayerRef.current.currentTime = time;
+        return;
+      }
+      if (providerInfo.provider === 'patreon' && patreonPlayerRef.current) {
+        patreonPlayerRef.current.currentTime = time;
+        return;
+      }
+      if (forceDriveEmbed && driveEmbedRef.current) {
+        driveEmbedRef.current.currentTime = time;
+        return;
+      }
       if (videoRef.current) {
-        // Only set currentTime if video metadata has loaded or readyState >= 1
         if (videoRef.current.readyState >= 1) {
           videoRef.current.currentTime = time;
         } else {
@@ -145,10 +191,15 @@ export const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(function
         }
       }
     },
-    retry: handleRetry,
+    retry: () => {
+      if (forceDriveEmbed) {
+        setForceDriveEmbed(false);
+      }
+      handleRetry();
+    },
   }));
 
-  // Handle volume, mute, and playback rate sync
+  // Handle volume, mute, and playback rate sync for native player
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.muted = isMuted;
@@ -323,143 +374,213 @@ export const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(function
     >
       {/* Video Viewport / Error Viewport */}
       <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden aspect-video">
-        {/* Real HTML5 Video Element */}
-        <video
-          ref={videoRef}
-          src={resolvedSrc}
-          playsInline
-          muted={isMuted}
-          onLoadStart={handleLoadStart}
-          onLoadedMetadata={handleLoadedMetadata}
-          onLoadedData={handleLoadedData}
-          onCanPlay={handleCanPlay}
-          onWaiting={handleWaiting}
-          onPlaying={handlePlaying}
-          onPause={handlePause}
-          onStalled={handleStalled}
-          onError={handleError}
-          onTimeUpdate={handleTimeUpdate}
-          className={`w-full h-full object-contain ${hasError || !src ? 'hidden' : 'block'}`}
-        />
+        {src && providerInfo.provider === 'youtube' && providerInfo.videoId ? (
+          <YouTubePlayer
+            ref={youtubePlayerRef}
+            id={id}
+            videoId={providerInfo.videoId}
+            title={title}
+            isMuted={isMuted}
+            volume={volume}
+            playbackRate={playbackRate}
+            onTimeUpdate={(t) => {
+              setCurrentTime(t);
+              onTimeUpdate?.(t);
+            }}
+            onTogglePlay={onTogglePlay}
+            onError={(msg) => {
+              setHasError(true);
+              setErrorInfo({
+                code: 99,
+                codeName: 'YOUTUBE_RESTRICTED',
+                title: 'YouTube Playback Restricted',
+                summary: msg,
+                detail: msg,
+                isGoogleDrive: false,
+                actionableSteps: [
+                  'Verify the video is public or unlisted.',
+                  'Ensure embedding is not disabled by the content creator.',
+                  'Click "Watch on YouTube" to open directly.',
+                ],
+              });
+              onErrorStateChange?.(true);
+            }}
+            className="w-full h-full"
+          />
+        ) : src && providerInfo.provider === 'patreon' ? (
+          <PatreonExternalPlayer
+            ref={patreonPlayerRef}
+            id={id}
+            url={src}
+            title={title}
+            subtitle={subtitle}
+            avatar={avatar}
+            targetTimestamp={targetTimestamp ?? currentTime}
+            className="w-full h-full"
+          />
+        ) : src && forceDriveEmbed && providerInfo.fileId ? (
+          <GoogleDriveEmbedPlayer
+            ref={driveEmbedRef}
+            id={id}
+            fileId={providerInfo.fileId}
+            title={title}
+            className="w-full h-full"
+          />
+        ) : (
+          <>
+            {/* Real HTML5 Video Element */}
+            <video
+              ref={videoRef}
+              src={resolvedSrc}
+              playsInline
+              muted={isMuted}
+              onLoadStart={handleLoadStart}
+              onLoadedMetadata={handleLoadedMetadata}
+              onLoadedData={handleLoadedData}
+              onCanPlay={handleCanPlay}
+              onWaiting={handleWaiting}
+              onPlaying={handlePlaying}
+              onPause={handlePause}
+              onStalled={handleStalled}
+              onError={handleError}
+              onTimeUpdate={handleTimeUpdate}
+              className={`w-full h-full object-contain ${hasError || !src ? 'hidden' : 'block'}`}
+            />
 
-        {/* Buffering Indicator */}
-        {isBuffering && !hasError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-xs pointer-events-none">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-700 text-xs text-white">
-              <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
-              <span>Buffering stream...</span>
-            </div>
-          </div>
-        )}
-
-        {/* Actionable Diagnostics Error Overlay */}
-        {hasError && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/95 p-4 text-center overflow-y-auto">
-            <div className="w-10 h-10 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center mb-2.5 shrink-0">
-              <AlertTriangle className="w-5 h-5" />
-            </div>
-
-            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-bold uppercase tracking-wider mb-1.5">
-              <span>{streamRoleLabel} Error</span>
-            </div>
-
-            <h3 className="text-sm font-bold text-white mb-1">
-              {errorInfo?.title || 'Video Stream Could Not Be Played'}
-            </h3>
-            <p className="text-xs text-slate-300 max-w-md mb-3 leading-relaxed">
-              {errorInfo?.summary ||
-                'The browser encountered a media decoding or access error while loading this stream.'}
-            </p>
-
-            {/* Actionable Steps */}
-            {errorInfo?.actionableSteps && errorInfo.actionableSteps.length > 0 && (
-              <div className="bg-slate-900/90 border border-slate-800 rounded-lg p-2.5 mb-3 text-left max-w-md w-full">
-                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
-                  How to resolve:
-                </span>
-                <ul className="text-[11px] text-slate-300 space-y-1 list-disc list-inside">
-                  {errorInfo.actionableSteps.map((step, idx) => (
-                    <li key={idx} className="leading-tight">
-                      {step}
-                    </li>
-                  ))}
-                </ul>
+            {/* Buffering Indicator */}
+            {isBuffering && !hasError && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-xs pointer-events-none">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-700 text-xs text-white">
+                  <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
+                  <span>Buffering stream...</span>
+                </div>
               </div>
             )}
 
-            {/* Retry Button */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleRetry}
-                disabled={isRetrying}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md transition-colors cursor-pointer disabled:opacity-50"
-              >
-                <RotateCcw className={`w-3.5 h-3.5 ${isRetrying ? 'animate-spin' : ''}`} />
-                <span>{isRetrying ? 'Retrying Stream...' : 'Retry Video'}</span>
-              </button>
+            {/* Actionable Diagnostics Error Overlay */}
+            {hasError && (
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/95 p-4 text-center overflow-y-auto">
+                <div className="w-10 h-10 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center mb-2.5 shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
 
-              <button
-                onClick={() => setShowDiagnostics((prev) => !prev)}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs transition-colors cursor-pointer"
-              >
-                <Info className="w-3.5 h-3.5" />
-                <span>Details</span>
-                {showDiagnostics ? (
-                  <ChevronUp className="w-3.5 h-3.5" />
-                ) : (
-                  <ChevronDown className="w-3.5 h-3.5" />
-                )}
-              </button>
-            </div>
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-bold uppercase tracking-wider mb-1.5">
+                  <span>{streamRoleLabel} Error</span>
+                </div>
 
-            {/* Collapsible Technical Diagnostics */}
-            {showDiagnostics && (
-              <div className="mt-3 bg-black/80 border border-slate-800 rounded-lg p-3 text-left max-w-md w-full font-mono text-[10px] text-slate-400 space-y-1">
-                <div>
-                  <span className="text-slate-500">Error Code:</span>{' '}
-                  <span className="text-rose-400 font-semibold">
-                    {errorInfo?.codeName} (code {errorInfo?.code})
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-500">Last Event:</span>{' '}
-                  <span className="text-slate-200">{lastMediaEvent}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500">Ready / Network State:</span>{' '}
-                  <span className="text-slate-200">
-                    {videoRef.current?.readyState ?? 0} / {videoRef.current?.networkState ?? 0}
-                  </span>
-                </div>
-                <div className="truncate">
-                  <span className="text-slate-500">Target URL:</span>{' '}
-                  <span className="text-indigo-300 truncate" title={src}>
-                    {src}
-                  </span>
-                </div>
-                {serverInspectResult && (
-                  <div>
-                    <span className="text-slate-500">Server Inspection:</span>{' '}
-                    <span
-                      className={serverInspectResult.ok ? 'text-emerald-400' : 'text-amber-400'}
-                    >
-                      {serverInspectResult.humanMessage}
+                <h3 className="text-sm font-bold text-white mb-1">
+                  {errorInfo?.title || 'Video Stream Could Not Be Played'}
+                </h3>
+                <p className="text-xs text-slate-300 max-w-md mb-3 leading-relaxed">
+                  {errorInfo?.summary ||
+                    'The browser encountered a media decoding or access error while loading this stream.'}
+                </p>
+
+                {/* Actionable Steps */}
+                {errorInfo?.actionableSteps && errorInfo.actionableSteps.length > 0 && (
+                  <div className="bg-slate-900/90 border border-slate-800 rounded-lg p-2.5 mb-3 text-left max-w-md w-full">
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                      How to resolve:
                     </span>
+                    <ul className="text-[11px] text-slate-300 space-y-1 list-disc list-inside">
+                      {errorInfo.actionableSteps.map((step, idx) => (
+                        <li key={idx} className="leading-tight">
+                          {step}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Retry & Embed Switch Buttons */}
+                <div className="flex items-center gap-2 flex-wrap justify-center">
+                  <button
+                    onClick={handleRetry}
+                    disabled={isRetrying}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    <RotateCcw className={`w-3.5 h-3.5 ${isRetrying ? 'animate-spin' : ''}`} />
+                    <span>{isRetrying ? 'Retrying Stream...' : 'Retry Video'}</span>
+                  </button>
+
+                  {providerInfo.provider === 'google_drive' && providerInfo.fileId && !forceDriveEmbed && (
+                    <button
+                      onClick={() => {
+                        setForceDriveEmbed(true);
+                        setHasError(false);
+                        onErrorStateChange?.(false);
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold shadow-md transition-colors cursor-pointer"
+                    >
+                      <HardDrive className="w-3.5 h-3.5" />
+                      <span>Switch to Drive Preview Embed</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => setShowDiagnostics((prev) => !prev)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs transition-colors cursor-pointer"
+                  >
+                    <Info className="w-3.5 h-3.5" />
+                    <span>Details</span>
+                    {showDiagnostics ? (
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                </div>
+
+                {/* Collapsible Technical Diagnostics */}
+                {showDiagnostics && (
+                  <div className="mt-3 bg-black/80 border border-slate-800 rounded-lg p-3 text-left max-w-md w-full font-mono text-[10px] text-slate-400 space-y-1">
+                    <div>
+                      <span className="text-slate-500">Error Code:</span>{' '}
+                      <span className="text-rose-400 font-semibold">
+                        {errorInfo?.codeName} (code {errorInfo?.code})
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Last Event:</span>{' '}
+                      <span className="text-slate-200">{lastMediaEvent}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Ready / Network State:</span>{' '}
+                      <span className="text-slate-200">
+                        {videoRef.current?.readyState ?? 0} / {videoRef.current?.networkState ?? 0}
+                      </span>
+                    </div>
+                    <div className="truncate">
+                      <span className="text-slate-500">Target URL:</span>{' '}
+                      <span className="text-indigo-300 truncate" title={src}>
+                        {src}
+                      </span>
+                    </div>
+                    {serverInspectResult && (
+                      <div>
+                        <span className="text-slate-500">Server Inspection:</span>{' '}
+                        <span
+                          className={serverInspectResult.ok ? 'text-emerald-400' : 'text-amber-400'}
+                        >
+                          {serverInspectResult.humanMessage}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             )}
-          </div>
-        )}
 
-        {/* Fallback canvas when video source isn't provided (blank canvas mode) */}
-        {!src && !hasError && (
-          <canvas
-            ref={canvasRef}
-            width={640}
-            height={360}
-            className="w-full h-full object-cover block"
-          />
+            {/* Fallback canvas when video source isn't provided (blank canvas mode) */}
+            {!src && !hasError && (
+              <canvas
+                ref={canvasRef}
+                width={640}
+                height={360}
+                className="w-full h-full object-cover block"
+              />
+            )}
+          </>
         )}
 
         {/* Top Overlay Badge */}
@@ -491,16 +612,27 @@ export const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(function
                 REACTOR
               </span>
             )}
-            {isLocalFile && (
+            {isLocalFile ? (
               <span className="ml-1 text-[9px] font-bold tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded">
                 LOCAL
               </span>
-            )}
-            {src && isGoogleDriveUrl(src) && (
-              <span className="ml-1 text-[9px] font-bold tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1.5 py-0.5 rounded">
-                DRIVE
+            ) : providerInfo.provider === 'youtube' ? (
+              <span className="ml-1 text-[9px] font-bold tracking-wider bg-red-500/20 text-red-300 border border-red-500/30 px-1.5 py-0.5 rounded">
+                YOUTUBE
               </span>
-            )}
+            ) : providerInfo.provider === 'patreon' ? (
+              <span className="ml-1 text-[9px] font-bold tracking-wider bg-orange-500/20 text-orange-300 border border-orange-500/30 px-1.5 py-0.5 rounded">
+                PATREON
+              </span>
+            ) : providerInfo.provider === 'google_drive' ? (
+              <span className="ml-1 text-[9px] font-bold tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1.5 py-0.5 rounded">
+                {forceDriveEmbed ? 'DRIVE EMBED' : 'DRIVE STREAM'}
+              </span>
+            ) : src ? (
+              <span className="ml-1 text-[9px] font-bold tracking-wider bg-sky-500/20 text-sky-300 border border-sky-500/30 px-1.5 py-0.5 rounded">
+                DIRECT STREAM
+              </span>
+            ) : null}
           </div>
 
           {/* Sync status indicator */}
