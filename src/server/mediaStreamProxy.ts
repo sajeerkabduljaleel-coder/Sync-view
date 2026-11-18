@@ -32,6 +32,39 @@ export function isPlayableMediaContentType(contentType: string | null): boolean 
 }
 
 /**
+ * Validates and normalizes an RFC 7233 single-range byte header (e.g. bytes=0-1024, bytes=1024-, bytes=-500).
+ * Rejects multipart ranges, non-byte units, non-numeric values, and inverted ranges (start > end).
+ */
+export function parseValidByteRangeHeader(rawRange: unknown): { valid: boolean; header?: string } {
+  if (typeof rawRange !== 'string') return { valid: false };
+  const trimmed = rawRange.trim();
+  const match = trimmed.match(/^bytes=(\d*)-(\d*)$/);
+  if (!match) return { valid: false };
+
+  const startStr = match[1];
+  const endStr = match[2];
+  if (!startStr && !endStr) return { valid: false };
+
+  if (startStr && endStr) {
+    const start = Number(startStr);
+    const end = Number(endStr);
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end) {
+      return { valid: false };
+    }
+  }
+
+  return { valid: true, header: trimmed };
+}
+
+function cancelBodyQuietly(res: Response | any): void {
+  try {
+    if (res && res.body && typeof res.body.cancel === 'function') {
+      res.body.cancel().catch(() => {});
+    }
+  } catch {}
+}
+
+/**
  * Reads up to maxBytes from a response body stream as text,
  * preventing unbounded buffering of huge payloads.
  */
@@ -104,6 +137,7 @@ async function resolveGoogleDriveStreamUrl(
       (location && location.includes('accounts.google.com')) ||
       finalUrl.includes('accounts.google.com')
     ) {
+      cancelBodyQuietly(res);
       return {
         isPrivate: true,
         error:
@@ -112,6 +146,7 @@ async function resolveGoogleDriveStreamUrl(
     }
 
     if (status === 404) {
+      cancelBodyQuietly(res);
       return {
         isNotFound: true,
         error: 'Google Drive file was not found (HTTP 404). Check the file ID.',
@@ -119,6 +154,7 @@ async function resolveGoogleDriveStreamUrl(
     }
 
     if (status === 403 || status === 429) {
+      cancelBodyQuietly(res);
       return {
         isQuotaExceeded: true,
         error: 'Google Drive download quota exceeded or access forbidden.',
@@ -127,6 +163,7 @@ async function resolveGoogleDriveStreamUrl(
 
     // 2. Direct redirect to CDN (googleusercontent.com)
     if (status >= 300 && status < 400 && location) {
+      cancelBodyQuietly(res);
       return { playableUrl: location };
     }
 
@@ -159,6 +196,7 @@ async function resolveGoogleDriveStreamUrl(
           signal: clientSignal,
         });
 
+        cancelBodyQuietly(secondRes);
         const secondLocation = secondRes.headers.get('location');
         if (
           (secondLocation && secondLocation.includes('accounts.google.com')) ||
@@ -195,6 +233,8 @@ async function resolveGoogleDriveStreamUrl(
       };
     }
 
+    cancelBodyQuietly(res);
+
     // 4. Direct media stream
     if (isPlayableMediaContentType(contentType)) {
       return { playableUrl: finalUrl };
@@ -206,7 +246,7 @@ async function resolveGoogleDriveStreamUrl(
       throw err;
     }
     return {
-      error: 'Failed to resolve Google Drive link: ' + (err?.message || 'Network error'),
+      error: 'Failed to resolve Google Drive link due to a remote network error.',
     };
   }
 }
@@ -319,11 +359,15 @@ export async function handleMediaStream(req: Request, res: Response) {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     };
 
-    // Forward Range header if present (validate RFC 7233 format strictly: bytes=0-1024, bytes=1024-, bytes=-500)
+    // Forward Range header if present (validate RFC 7233 syntax and bounds)
     if (req.headers.range && typeof req.headers.range === 'string') {
-      const rangeVal = req.headers.range.trim();
-      if (/^bytes=(\d+-\d*|\d*-\d+)$/.test(rangeVal)) {
-        requestHeaders['Range'] = rangeVal;
+      const parsedRange = parseValidByteRangeHeader(req.headers.range);
+      if (!parsedRange.valid) {
+        res.removeListener('close', onResponseClose);
+        return res.status(416).json({ error: 'Malformed or inverted byte range requested.' });
+      }
+      if (parsedRange.header) {
+        requestHeaders['Range'] = parsedRange.header;
       }
     }
 
@@ -340,25 +384,37 @@ export async function handleMediaStream(req: Request, res: Response) {
     const rawContentType = upstreamRes.headers.get('content-type') || '';
     const cleanContentType = rawContentType.split(';')[0].trim().toLowerCase();
 
-    // Preserve upstream error status codes (403, 404, 416)
+    // Preserve upstream error status codes (403, 404, 416) and cancel unused bodies
     if (status === 404) {
+      cancelBodyQuietly(upstreamRes);
       res.removeListener('close', onResponseClose);
       return res.status(404).json({ error: 'Media stream not found (HTTP 404).' });
     }
     if (status === 403 || status === 401) {
+      cancelBodyQuietly(upstreamRes);
       res.removeListener('close', onResponseClose);
       return res.status(403).json({ error: 'Access denied by remote media host.' });
     }
     if (status === 416) {
+      cancelBodyQuietly(upstreamRes);
       res.removeListener('close', onResponseClose);
       const contentRange = upstreamRes.headers.get('content-range');
       if (contentRange) res.setHeader('Content-Range', contentRange);
       return res.status(416).json({ error: 'Requested range not satisfiable.' });
     }
+    if (status < 200 || status >= 300) {
+      cancelBodyQuietly(upstreamRes);
+      res.removeListener('close', onResponseClose);
+      return res.status(502).json({
+        error: `Remote media host returned unexpected status HTTP ${status}.`,
+        code: 'UPSTREAM_BAD_STATUS',
+      });
+    }
 
-    // Validate that upstream content is actually media
+    // Validate that upstream content is actually media on BOTH 200 and 206
     // CRITICAL: Do NOT default unknown content types to video/mp4 and do NOT relabel HTML as video!
     if (cleanContentType.includes('text/html')) {
+      cancelBodyQuietly(upstreamRes);
       res.removeListener('close', onResponseClose);
       return res.status(415).json({
         error: 'Upstream returned an HTML webpage instead of a playable video stream.',
@@ -367,6 +423,7 @@ export async function handleMediaStream(req: Request, res: Response) {
     }
 
     if (!isPlayableMediaContentType(cleanContentType)) {
+      cancelBodyQuietly(upstreamRes);
       res.removeListener('close', onResponseClose);
       return res.status(415).json({
         error: `Unsupported media content-type "${cleanContentType}". Direct video streams required.`,
@@ -397,9 +454,10 @@ export async function handleMediaStream(req: Request, res: Response) {
       return res.end();
     }
 
-    // Stream response chunks with proper backpressure and lifecycle teardown
+    // Stream response chunks with backpressure, lifecycle teardown, and read idle timeout
     const reader = upstreamRes.body.getReader();
     let isStreamDone = false;
+    const READ_IDLE_TIMEOUT_MS = 15000;
 
     const cleanup = () => {
       isStreamDone = true;
@@ -413,7 +471,20 @@ export async function handleMediaStream(req: Request, res: Response) {
           break;
         }
 
-        const { done, value } = await reader.read();
+        let idleTimer: ReturnType<typeof setTimeout> | null = null;
+        const readResult = await Promise.race([
+          reader.read(),
+          new Promise<never>((_, reject) => {
+            idleTimer = setTimeout(() => {
+              abortController.abort(new Error('Upstream stream read timed out'));
+              reject(new Error('Upstream stream read timed out'));
+            }, READ_IDLE_TIMEOUT_MS);
+          }),
+        ]).finally(() => {
+          if (idleTimer) clearTimeout(idleTimer);
+        });
+
+        const { done, value } = readResult;
         if (done) {
           isStreamDone = true;
           if (!res.writableEnded && !res.destroyed) {
@@ -570,6 +641,7 @@ export async function handleMediaInspect(req: Request, res: Response) {
     });
   }
 
+  let upstreamToCancel: globalThis.Response | null = null;
   try {
     // Lightweight range request to inspect headers without downloading full payload
     const { response: upstream } = await safeFetch(targetUrl, {
@@ -582,6 +654,7 @@ export async function handleMediaInspect(req: Request, res: Response) {
       maxRedirects: 5,
       timeoutMs: 6000,
     });
+    upstreamToCancel = upstream;
 
     const status = upstream.status;
     const rawContentType = upstream.headers.get('content-type') || '';
@@ -627,6 +700,17 @@ export async function handleMediaInspect(req: Request, res: Response) {
       });
     }
 
+    if (status < 200 || status >= 300) {
+      return res.json({
+        ok: false,
+        status,
+        contentType: cleanContentType,
+        isMedia: false,
+        errorReason: 'UPSTREAM_ERROR',
+        humanMessage: `Remote host returned HTTP ${status} instead of a playable stream.`,
+      });
+    }
+
     if (!isMedia) {
       return res.json({
         ok: false,
@@ -652,14 +736,21 @@ export async function handleMediaInspect(req: Request, res: Response) {
       err?.name === 'AbortError' ||
       err?.message?.includes('timed out') ||
       err?.message?.includes('timeout');
+    const isSsrf = err?.message?.includes('SSRF Blocked');
 
     return res.json({
       ok: false,
-      status: isTimeout ? 504 : 0,
-      errorReason: isTimeout ? 'NETWORK_TIMEOUT' : 'NETWORK_ERROR',
-      humanMessage: isTimeout
+      status: isSsrf ? 403 : isTimeout ? 504 : 0,
+      errorReason: isSsrf ? 'UNSUPPORTED_PROVIDER' : isTimeout ? 'NETWORK_TIMEOUT' : 'NETWORK_ERROR',
+      humanMessage: isSsrf
+        ? 'Destination address or provider is restricted.'
+        : isTimeout
         ? 'Connection to remote media host timed out.'
-        : 'Could not connect to media server: ' + (err?.message || 'Network error'),
+        : 'Could not connect to the remote media server.',
     });
+  } finally {
+    if (upstreamToCancel) {
+      cancelBodyQuietly(upstreamToCancel);
+    }
   }
 }

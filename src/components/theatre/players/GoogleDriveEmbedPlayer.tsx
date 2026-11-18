@@ -3,64 +3,52 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useImperativeHandle, forwardRef, useState } from 'react';
-import { MediaPlayerElement } from '../../../services/mediaProviders/types';
-import { ExternalLink, HardDrive, Info } from 'lucide-react';
+import React, { useImperativeHandle, forwardRef } from 'react';
+import {
+  MANUAL_ONLY_CAPABILITIES,
+  MediaPlayerAdapter,
+} from '../../../services/mediaProviders/types';
+import { ExternalLink, HardDrive, RotateCcw } from 'lucide-react';
 
 export interface GoogleDriveEmbedPlayerProps {
   id: string;
   fileId: string;
   title?: string;
+  onTryDirectStream?: () => void;
   className?: string;
 }
 
-export const GoogleDriveEmbedPlayer = forwardRef<MediaPlayerElement, GoogleDriveEmbedPlayerProps>(
-  function GoogleDriveEmbedPlayer({ id, fileId, title, className = '' }, ref) {
+export function createGoogleDrivePreviewAdapter(id: string): MediaPlayerAdapter {
+  return {
+    id,
+    provider: 'google_drive',
+    playbackMode: 'embedded',
+    syncCapability: 'manual_sync',
+    capabilities: MANUAL_ONLY_CAPABILITIES,
+    getCurrentTime: () => null,
+    getDuration: () => null,
+    isPaused: () => null,
+    isBuffering: () => false,
+    getReadyState: () => 1,
+    getError: () => null,
+    getPlaybackRate: () => null,
+    isMuted: () => null,
+    getVolume: () => null,
+    play: async () => false,
+    pause: () => false,
+    seekTo: () => false,
+    setPlaybackRate: () => false,
+    setMuted: () => false,
+    setVolume: () => false,
+  };
+}
+
+export const GoogleDriveEmbedPlayer = forwardRef<MediaPlayerAdapter, GoogleDriveEmbedPlayerProps>(
+  function GoogleDriveEmbedPlayer({ id, fileId, title, onTryDirectStream, className = '' }, ref) {
     const embedUrl = `https://drive.google.com/file/d/${fileId}/preview`;
     const shareUrl = `https://drive.google.com/file/d/${fileId}/view`;
 
-    const [currentTime, setCurrentTime] = useState(0);
-    const [paused, setPaused] = useState(true);
-
-    // Provide MediaPlayerElement interface for session coordination
-    useImperativeHandle(ref, () => ({
-      get currentTime() {
-        return currentTime;
-      },
-      set currentTime(val: number) {
-        setCurrentTime(val);
-      },
-      get duration() {
-        return 180;
-      },
-      get paused() {
-        return paused;
-      },
-      get error() {
-        return null;
-      },
-      get readyState() {
-        return 4;
-      },
-      get playbackRate() {
-        return 1.0;
-      },
-      set playbackRate(_val: number) {},
-      get muted() {
-        return false;
-      },
-      set muted(_val: boolean) {},
-      get volume() {
-        return 1.0;
-      },
-      set volume(_val: number) {},
-      play: () => {
-        setPaused(false);
-      },
-      pause: () => {
-        setPaused(true);
-      },
-    }));
+    useImperativeHandle(ref, () => createGoogleDrivePreviewAdapter(id), [id]);
 
     return (
       <div className={`relative bg-black rounded-xl overflow-hidden aspect-video flex flex-col ${className}`}>
@@ -72,16 +60,27 @@ export const GoogleDriveEmbedPlayer = forwardRef<MediaPlayerElement, GoogleDrive
           className="w-full h-full border-0"
         />
 
-        {/* Top Info Pill */}
+        {/* Top Info & Manual Sync Pill */}
         <div className="absolute top-2 left-2 z-10 pointer-events-none">
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-md text-[10px] font-bold text-amber-400 border border-amber-500/30">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-black/80 backdrop-blur-md text-[10px] font-bold text-amber-300 border border-amber-500/40">
             <HardDrive className="w-3 h-3" />
-            Google Drive Preview
+            Drive Preview &bull; Manual Sync (Controls Restricted)
           </span>
         </div>
 
-        {/* External Link Action */}
-        <div className="absolute top-2 right-2 z-10">
+        {/* Action Buttons */}
+        <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5">
+          {onTryDirectStream && (
+            <button
+              type="button"
+              onClick={onTryDirectStream}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-indigo-950/90 hover:bg-indigo-900 text-[11px] font-medium text-indigo-200 border border-indigo-500/40 shadow-md transition-colors cursor-pointer"
+              title="Retry verified Google Drive proxy stream for automatic sync"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span className="hidden sm:inline">Try Auto-Sync Stream</span>
+            </button>
+          )}
           <a
             href={shareUrl}
             target="_blank"

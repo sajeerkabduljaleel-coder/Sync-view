@@ -49,12 +49,13 @@ export default function App() {
     participantToken?: string;
   } | null>(null);
 
-  // Watch party creation error state (for actionable retry / private viewing)
+  // Watch party creation & join error states
   const [partyCreationError, setPartyCreationError] = useState<{
     message: string;
     source: VideoSource;
     reaction: ReactionVideo;
   } | null>(null);
+  const [joinPartyError, setJoinPartyError] = useState<string | null>(null);
   const [isCreatingParty, setIsCreatingParty] = useState(false);
 
   // Active reaction for Creator Studio calibration
@@ -64,6 +65,51 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(authService.getUser());
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authInitialTab, setAuthInitialTab] = useState<'signin' | 'register' | 'profile'>('signin');
+  const [pendingCreateAfterAuth, setPendingCreateAfterAuth] = useState(false);
+
+  const readPartyCreds = (
+    code: string
+  ): { hostToken?: string; participantToken?: string } => {
+    try {
+      const raw = sessionStorage.getItem(`syncview_party_creds_${code.toUpperCase()}`);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return {
+        hostToken: typeof parsed.hostToken === 'string' ? parsed.hostToken : undefined,
+        participantToken:
+          typeof parsed.participantToken === 'string' ? parsed.participantToken : undefined,
+      };
+    } catch {
+      return {};
+    }
+  };
+
+  const writePartyCreds = (
+    code: string,
+    creds: { hostToken?: string; participantToken?: string }
+  ) => {
+    try {
+      sessionStorage.setItem(
+        `syncview_party_creds_${code.toUpperCase()}`,
+        JSON.stringify(creds)
+      );
+    } catch {}
+  };
+
+  const resolveSourceForReaction = (rx: ReactionVideo): VideoSource => {
+    const found = sources.find((s) => s.id === rx.sourceId);
+    if (found) return found;
+    return {
+      id: rx.sourceId || 'src-custom',
+      title: 'Original Source Content',
+      creator: 'Creator',
+      duration: rx.duration || 300,
+      url: '',
+      thumbnail: rx.thumbnail || '',
+      category: 'Movies & TV',
+      description: 'Synchronized stream source',
+    };
+  };
 
   // Initialize Auth & Catalogue
   useEffect(() => {
@@ -115,6 +161,7 @@ export default function App() {
         ? extraReactions
         : reactions.filter((r) => r.sourceId === source.id && r.id !== reaction.id).slice(0, 3);
 
+    setJoinPartyError(null);
     setTheatreState({
       active: true,
       source,
@@ -122,72 +169,113 @@ export default function App() {
       extraReactions: extras,
       isHost: true,
     });
+    setMode('viewer');
+    setViewerTab('home');
   };
 
-  const handleJoinParty = async (roomCode: string) => {
+  const handleJoinParty = async (rawCode: string) => {
+    const roomCode = rawCode.trim().toUpperCase();
+    if (!roomCode) {
+      setJoinPartyError('Please enter a valid Watch Party room code.');
+      return;
+    }
+
+    setJoinPartyError(null);
     const participantName = currentUser ? currentUser.name : 'Guest Viewer';
+    const existingCreds = readPartyCreds(roomCode);
+
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (existingCreds.participantToken) {
+        headers['x-participant-token'] = existingCreds.participantToken;
+      }
+
       const joinRes = await fetch(`/api/parties/${roomCode}/join`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ participantName }),
       });
-      if (joinRes.ok) {
-        const data = await joinRes.json();
+
+      const data = await joinRes.json().catch(() => ({}));
+      if (joinRes.ok && data.room) {
         const party = data.room;
+        const participantToken = data.participantToken || existingCreds.participantToken;
+        const hostToken = existingCreds.hostToken;
+        writePartyCreds(party.roomCode, { hostToken, participantToken });
+
         setTheatreState({
           active: true,
           source: party.sourceVideo,
           primaryReaction: party.primaryReaction,
           extraReactions: party.additionalReactions || [],
-          isHost: false,
+          isHost: Boolean(hostToken),
           roomCode: party.roomCode,
-          participantToken: data.participantToken,
+          hostToken,
+          participantToken,
         });
+        setMode('viewer');
+        setViewerTab('home');
         return;
       }
-    } catch {}
 
-    // Fallback if network call fails in offline demo
-    if (sources.length > 0 && reactions.length > 0) {
-      setTheatreState({
-        active: true,
-        source: sources[0],
-        primaryReaction: reactions[0],
-        extraReactions: reactions.slice(1, 3),
-        isHost: false,
-        roomCode,
-      });
+      setJoinPartyError(
+        data.error || `Watch party room "${roomCode}" was not found or has expired.`
+      );
+    } catch {
+      setJoinPartyError(
+        `Network error while attempting to join Watch Party "${roomCode}".`
+      );
     }
   };
 
-  const handleCreateParty = async (source: VideoSource, reaction: ReactionVideo) => {
+  const handleCreateParty = async (
+    source: VideoSource,
+    reaction: ReactionVideo,
+    extraReactions: ReactionVideo[] = [],
+    customTitle?: string
+  ) => {
     setIsCreatingParty(true);
     setPartyCreationError(null);
+    setJoinPartyError(null);
     const hostName = currentUser ? currentUser.name : 'Host';
+
     try {
       const res = await fetch('/api/parties', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: `${reaction.creator}'s Watch Party`,
+          title: customTitle?.trim() || `${reaction.creator}'s Watch Party`,
           hostName,
           sourceId: source.id,
           reactionId: reaction.id,
+          source,
+          reaction,
+          additionalReactions: extraReactions,
         }),
       });
       if (res.ok) {
         const data = await res.json();
+        const createdRoomCode = data.room?.roomCode;
+        if (createdRoomCode) {
+          writePartyCreds(createdRoomCode, {
+            hostToken: data.hostToken,
+            participantToken: data.participantToken,
+          });
+        }
         setTheatreState({
           active: true,
-          source,
-          primaryReaction: reaction,
-          extraReactions: data.room?.additionalReactions || [],
+          source: data.room?.sourceVideo || source,
+          primaryReaction: data.room?.primaryReaction || reaction,
+          extraReactions: data.room?.additionalReactions || extraReactions,
           isHost: true,
-          roomCode: data.room?.roomCode,
+          roomCode: createdRoomCode,
           hostToken: data.hostToken,
           participantToken: data.participantToken,
         });
+        setMode('viewer');
+        setViewerTab('home');
         return;
       }
       const errData = await res.json().catch(() => ({}));
@@ -218,9 +306,13 @@ export default function App() {
     setActiveStudioReaction(updated);
   };
 
-  const handleWizardComplete = async (newReaction: ReactionVideo, _source: VideoSource) => {
-    await catalogueService.saveReaction(newReaction);
-    setReactions((prev) => [newReaction, ...prev]);
+  const handleWizardComplete = async (newReaction: ReactionVideo, newSource: VideoSource) => {
+    await Promise.all([
+      catalogueService.saveSource(newSource),
+      catalogueService.saveReaction(newReaction),
+    ]);
+    setSources((prev) => [newSource, ...prev.filter((s) => s.id !== newSource.id)]);
+    setReactions((prev) => [newReaction, ...prev.filter((r) => r.id !== newReaction.id)]);
     setActiveStudioReaction(newReaction);
     setReactorTab('studio');
   };
@@ -228,6 +320,7 @@ export default function App() {
   // Protected action helper
   const handleStartCreateReaction = () => {
     if (!authService.isAuthenticated()) {
+      setPendingCreateAfterAuth(true);
       setAuthInitialTab('signin');
       setIsAuthOpen(true);
       return;
@@ -236,8 +329,8 @@ export default function App() {
   };
 
   const activeSourceForStudio = activeStudioReaction
-    ? sources.find((s) => s.id === activeStudioReaction.sourceId) || sources[0]
-    : sources[0];
+    ? resolveSourceForReaction(activeStudioReaction)
+    : sources[0] || null;
 
   return (
     <div className="min-h-screen bg-[#07090e] text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
@@ -251,6 +344,7 @@ export default function App() {
         onSelectReactorTab={(tab) => setReactorTab(tab)}
         currentUser={currentUser}
         onOpenAuth={(tab) => {
+          setPendingCreateAfterAuth(false);
           setAuthInitialTab(tab || (currentUser ? 'profile' : 'signin'));
           setIsAuthOpen(true);
         }}
@@ -286,6 +380,9 @@ export default function App() {
                   });
                 }}
                 onJoinPartyByCode={handleJoinParty}
+                onCreateParty={handleCreateParty}
+                joinPartyError={joinPartyError}
+                onClearJoinPartyError={() => setJoinPartyError(null)}
               />
             )}
             {viewerTab === 'explore' && (
@@ -301,6 +398,8 @@ export default function App() {
                 reactions={reactions}
                 onJoinRoom={handleJoinParty}
                 onCreateParty={handleCreateParty}
+                joinError={joinPartyError}
+                onClearJoinError={() => setJoinPartyError(null)}
               />
             )}
             {viewerTab === 'library' && (
@@ -327,7 +426,7 @@ export default function App() {
                   setReactorTab('studio');
                 }}
                 onOpenTheatre={(rx) => {
-                  const src = sources.find((s) => s.id === rx.sourceId) || sources[0];
+                  const src = resolveSourceForReaction(rx);
                   handleWatchInTheatre(src, rx);
                 }}
               />
@@ -342,7 +441,7 @@ export default function App() {
                   setReactorTab('studio');
                 }}
                 onOpenTheatre={(rx) => {
-                  const src = sources.find((s) => s.id === rx.sourceId) || sources[0];
+                  const src = resolveSourceForReaction(rx);
                   handleWatchInTheatre(src, rx);
                 }}
               />
@@ -353,17 +452,42 @@ export default function App() {
                 onCancel={() => setReactorTab('home')}
               />
             )}
-            {reactorTab === 'studio' && activeStudioReaction && activeSourceForStudio && (
-              <CreatorStudio
-                sourceVideo={activeSourceForStudio}
-                reaction={activeStudioReaction}
-                onSave={handleSaveCalibratedReaction}
-                onBack={() => setReactorTab('home')}
-                onOpenInTheatre={(rx) => {
-                  const src = sources.find((s) => s.id === rx.sourceId) || sources[0];
-                  handleWatchInTheatre(src, rx);
-                }}
-              />
+            {reactorTab === 'studio' && (
+              activeStudioReaction && activeSourceForStudio ? (
+                <CreatorStudio
+                  key={activeStudioReaction.id}
+                  sourceVideo={activeSourceForStudio}
+                  reaction={activeStudioReaction}
+                  onSave={handleSaveCalibratedReaction}
+                  onBack={() => setReactorTab('home')}
+                  onOpenInTheatre={(rx) => {
+                    const src = resolveSourceForReaction(rx);
+                    handleWatchInTheatre(src, rx);
+                  }}
+                />
+              ) : (
+                <div className="max-w-xl mx-auto my-12 p-6 bg-slate-900/70 border border-slate-800 rounded-2xl text-center flex flex-col items-center gap-3">
+                  <AlertCircle className="w-8 h-8 text-indigo-400" />
+                  <h3 className="text-base font-bold text-white">No Reaction Selected for Studio</h3>
+                  <p className="text-xs text-slate-400">
+                    Create a new reaction or pick an existing reaction from Creator Home to calibrate timing anchors and chapters.
+                  </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      onClick={() => setReactorTab('home')}
+                      className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200"
+                    >
+                      Back to Creator Home
+                    </button>
+                    <button
+                      onClick={handleStartCreateReaction}
+                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white"
+                    >
+                      Create Reaction
+                    </button>
+                  </div>
+                </div>
+              )
             )}
           </>
         )}
@@ -372,10 +496,18 @@ export default function App() {
       {/* Account / Authentication Modal */}
       <AuthModal
         isOpen={isAuthOpen}
-        onClose={() => setIsAuthOpen(false)}
+        onClose={() => {
+          setIsAuthOpen(false);
+          setPendingCreateAfterAuth(false);
+        }}
         initialTab={authInitialTab}
         onSuccess={(user) => {
           setCurrentUser(user);
+          if (pendingCreateAfterAuth) {
+            setPendingCreateAfterAuth(false);
+            setMode('reactor');
+            setReactorTab('create');
+          }
         }}
       />
 
@@ -432,10 +564,12 @@ export default function App() {
                     source,
                     primaryReaction: reaction,
                     extraReactions: [],
-                    isHost: false,
+                    isHost: true,
                     roomCode: undefined,
                   });
                   setPartyCreationError(null);
+                  setMode('viewer');
+                  setViewerTab('home');
                 }}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm font-medium rounded-xl transition"
               >

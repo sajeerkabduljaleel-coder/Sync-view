@@ -28,8 +28,6 @@ import { handleMediaStream, handleMediaInspect } from './src/server/mediaStreamP
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const app = express();
-
 function resolvePort(): number {
   const args = process.argv.slice(2);
   const portIndex = args.indexOf('--port');
@@ -49,212 +47,432 @@ function resolvePort(): number {
 }
 const port = resolvePort();
 
-// Enforce request payload size limit (max 64kb) to protect against DoS
-app.use(express.json({ limit: '64kb' }));
+import { SyncAnchor, AnchorType, VideoSource, ReactionVideo } from './src/types';
 
-// Global instance of the authoritative watch party manager
-const partyManager = new WatchPartyManager();
-
-// Middleware: Extract & attach authenticated user context if present
-app.use(authenticateUser);
-
-// ==========================================
-// API Routes
-// ==========================================
-
-// Health check
-app.get('/api/health', (_req: Request, res: Response) => {
-  res.json({
-    status: 'healthy',
-    platform: 'SyncView',
-    authProvider: serverAuthProvider.name,
-    isProductionAuth: serverAuthProvider.isProductionReady,
-    timestamp: Date.now(),
-  });
-});
-
-// Auth provider status & missing production configuration disclosure
-app.get('/api/auth/status', (_req: Request, res: Response) => {
-  res.json({
-    providerId: serverAuthProvider.id,
-    providerName: serverAuthProvider.name,
-    isProductionReady: serverAuthProvider.isProductionReady,
-    missingConfiguration: serverAuthProvider.getMissingProductionConfig(),
-    documentation: 'To deploy to live users, configure Firebase Auth (verifyIdToken) or Google OAuth.',
-  });
-});
-
-// Download full source code as zip
-app.get('/api/download-source', (_req: Request, res: Response) => {
-  const zipPath = path.resolve(__dirname, 'public/syncview-source.zip');
-  res.download(zipPath, 'syncview-source.zip', (err) => {
-    if (err) {
-      res.status(500).json({ error: 'Failed to download source zip' });
-    }
-  });
-});
-
-// Media Stream Proxy & Google Drive Resolution (Supports Range Requests 206)
-app.get('/api/media/stream', handleMediaStream);
-app.get('/api/media/inspect', handleMediaInspect);
-
-// Catalogue API
-app.get('/api/catalogue/sources', (_req: Request, res: Response) => {
-  res.json(SAMPLE_SOURCES);
-});
-
-app.get('/api/catalogue/reactions', (req: Request, res: Response) => {
-  const sourceId = req.query.sourceId as string;
-  if (sourceId) {
-    const filtered = SAMPLE_REACTIONS.filter((r) => r.sourceId === sourceId);
-    return res.json(filtered);
-  }
-  res.json(SAMPLE_REACTIONS);
-});
-
-// Watch Party API
-
-// Browse active watch parties
-app.get('/api/parties', async (_req: Request, res: Response) => {
+function isSafePartyMediaUrl(rawUrl: unknown): boolean {
+  if (typeof rawUrl !== 'string') return false;
+  const trimmed = rawUrl.trim();
+  if (!trimmed || trimmed.length > 2048) return false;
+  if (trimmed.startsWith('/api/media/stream')) return true;
   try {
-    const allRooms = await partyManager.getAllRooms();
-    res.json(allRooms);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to retrieve active parties' });
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
   }
-});
+}
 
-// Create a new room with strict input validation
-app.post('/api/parties', async (req: Request, res: Response) => {
-  try {
-    const {
+const ALLOWED_ANCHOR_TYPES = new Set<AnchorType>(['intro', 'linear', 'pause', 'skip', 'outro']);
+
+function validateAndSanitizeSource(input: any): { valid: boolean; source?: VideoSource; error?: string } {
+  if (!input || typeof input !== 'object') {
+    return { valid: false, error: 'Invalid source object' };
+  }
+  const id = typeof input.id === 'string' ? input.id.trim().slice(0, 100) : '';
+  const title = typeof input.title === 'string' ? sanitizeHtml(input.title.trim().slice(0, 120)) : '';
+  const url = typeof input.url === 'string' ? input.url.trim() : '';
+
+  if (!id || !title) {
+    return { valid: false, error: 'Source video must include valid id and title' };
+  }
+  if (url.startsWith('blob:')) {
+    return {
+      valid: false,
+      error:
+        'Local device files (blob: URLs) cannot be streamed to remote Watch Party guests. Choose a web stream URL (Direct MP4, Google Drive, or YouTube) to host a Watch Party.',
+    };
+  }
+  if (!isSafePartyMediaUrl(url)) {
+    return { valid: false, error: 'Source video URL must be a valid HTTP(S) or proxy stream URL' };
+  }
+
+  const duration =
+    typeof input.duration === 'number' && Number.isFinite(input.duration) && input.duration > 0
+      ? Math.min(86400, input.duration)
+      : 300;
+
+  return {
+    valid: true,
+    source: {
+      id: sanitizeHtml(id),
       title,
-      hostName,
+      creator:
+        typeof input.creator === 'string' && input.creator.trim()
+          ? sanitizeHtml(input.creator.trim().slice(0, 60))
+          : 'Source Creator',
+      duration,
+      url,
+      thumbnail:
+        typeof input.thumbnail === 'string' && isSafePartyMediaUrl(input.thumbnail)
+          ? input.thumbnail.trim()
+          : 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80',
+      category:
+        typeof input.category === 'string' && input.category.trim()
+          ? (sanitizeHtml(input.category.trim().slice(0, 40)) as VideoSource['category'])
+          : 'Movies & TV',
+      description:
+        typeof input.description === 'string'
+          ? sanitizeHtml(input.description.trim().slice(0, 300))
+          : 'Synchronized stream source',
+    },
+  };
+}
+
+function validateAndSanitizeReaction(
+  input: any,
+  expectedSourceId: string
+): { valid: boolean; reaction?: ReactionVideo; error?: string } {
+  if (!input || typeof input !== 'object') {
+    return { valid: false, error: 'Invalid reaction object' };
+  }
+  const id = typeof input.id === 'string' ? input.id.trim().slice(0, 100) : '';
+  const sourceId = typeof input.sourceId === 'string' ? sanitizeHtml(input.sourceId.trim().slice(0, 100)) : '';
+  const creator =
+    typeof input.creator === 'string' && input.creator.trim()
+      ? sanitizeHtml(input.creator.trim().slice(0, 60))
+      : '';
+  const title =
+    typeof input.title === 'string' && input.title.trim()
+      ? sanitizeHtml(input.title.trim().slice(0, 120))
+      : '';
+  const url = typeof input.url === 'string' ? input.url.trim() : '';
+
+  if (!id || !creator || !title) {
+    return { valid: false, error: 'Reaction video must include valid id, title, and creator' };
+  }
+  if (sourceId !== expectedSourceId) {
+    return {
+      valid: false,
+      error: `Mismatched reaction: Reaction "${id}" is mapped to source "${sourceId}", not "${expectedSourceId}"`,
+    };
+  }
+  if (url.startsWith('blob:')) {
+    return {
+      valid: false,
+      error:
+        'Local device files (blob: URLs) cannot be streamed to remote Watch Party guests. Choose a web stream URL (Direct MP4, Google Drive, or YouTube) to host a Watch Party.',
+    };
+  }
+  if (!isSafePartyMediaUrl(url)) {
+    return { valid: false, error: 'Reaction video URL must be a valid HTTP(S) or proxy stream URL' };
+  }
+
+  const rawAnchors = Array.isArray(input.anchors) ? input.anchors.slice(0, 50) : [];
+  const anchors: SyncAnchor[] = [];
+  for (let i = 0; i < rawAnchors.length; i++) {
+    const a = rawAnchors[i];
+    if (!a || typeof a !== 'object') continue;
+    const sTime = Number(a.sourceTime);
+    const rTime = Number(a.reactionTime);
+    if (!isValidTimestamp(sTime) || !isValidTimestamp(rTime)) {
+      return { valid: false, error: 'Invalid anchor timestamp in reaction configuration' };
+    }
+    const anchorType: AnchorType = ALLOWED_ANCHOR_TYPES.has(a.type) ? a.type : 'linear';
+    anchors.push({
+      id: typeof a.id === 'string' && a.id.trim() ? sanitizeHtml(a.id.trim().slice(0, 60)) : `anc-${i}`,
+      sourceTime: sTime,
+      reactionTime: rTime,
+      type: anchorType,
+      label: typeof a.label === 'string' ? sanitizeHtml(a.label.trim().slice(0, 80)) : undefined,
+    });
+  }
+
+  const introDuration =
+    typeof input.introDuration === 'number' && Number.isFinite(input.introDuration) && input.introDuration >= 0
+      ? Math.min(3600, input.introDuration)
+      : anchors[0]?.reactionTime || 0;
+
+  if (anchors.length === 0) {
+    anchors.push({
+      id: `anc-intro-${Date.now()}`,
+      sourceTime: 0,
+      reactionTime: introDuration,
+      type: 'intro',
+    });
+  }
+
+  const duration =
+    typeof input.duration === 'number' && Number.isFinite(input.duration) && input.duration > 0
+      ? Math.min(86400, input.duration)
+      : 320;
+
+  return {
+    valid: true,
+    reaction: {
+      id: sanitizeHtml(id),
       sourceId,
-      reactionId,
-      additionalReactionIds,
-      source: directSource,
-      reaction: directReaction,
-      additionalReactions: directAdditional,
-    } = req.body;
+      creator,
+      channelName:
+        typeof input.channelName === 'string' && input.channelName.trim()
+          ? sanitizeHtml(input.channelName.trim().slice(0, 60))
+          : `${creator} Live`,
+      avatar:
+        typeof input.avatar === 'string' && isSafePartyMediaUrl(input.avatar)
+          ? input.avatar.trim()
+          : `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(creator)}`,
+      title,
+      duration,
+      introDuration,
+      url,
+      thumbnail:
+        typeof input.thumbnail === 'string' && isSafePartyMediaUrl(input.thumbnail)
+          ? input.thumbnail.trim()
+          : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80',
+      anchors,
+      chapters: Array.isArray(input.chapters)
+        ? input.chapters.slice(0, 30).map((c: any, idx: number) => ({
+            id: typeof c?.id === 'string' ? sanitizeHtml(c.id.slice(0, 50)) : `ch-${idx}`,
+            title: typeof c?.title === 'string' ? sanitizeHtml(c.title.slice(0, 80)) : 'Chapter',
+            sourceTimestamp: isValidTimestamp(Number(c?.sourceTimestamp)) ? Number(c.sourceTimestamp) : 0,
+            reactionTimestamp: isValidTimestamp(Number(c?.reactionTimestamp)) ? Number(c.reactionTimestamp) : 0,
+          }))
+        : [],
+      highlights: [],
+      notes: [],
+      views: 0,
+      likes: 0,
+      isPublished: Boolean(input.isPublished ?? true),
+      createdAt: typeof input.createdAt === 'number' ? input.createdAt : Date.now(),
+    },
+  };
+}
 
-    let source = directSource;
-    let primaryReaction = directReaction;
+export function createSyncViewApp(customPartyManager?: WatchPartyManager): express.Express {
+  const app = express();
 
-    // 1. Resolve source
-    if (!source) {
-      if (!sourceId || typeof sourceId !== 'string' || !sourceId.trim()) {
-        return res.status(400).json({ error: 'Missing or invalid required field: sourceId' });
+  // Enforce request payload size limit (max 64kb) to protect against DoS
+  app.use(express.json({ limit: '64kb' }));
+
+  // Authoritative watch party manager
+  const partyManager = customPartyManager || new WatchPartyManager();
+
+  // Middleware: Extract & attach authenticated user context if present
+  app.use(authenticateUser);
+
+  // ==========================================
+  // API Routes
+  // ==========================================
+
+  // Health check
+  app.get('/api/health', (_req: Request, res: Response) => {
+    res.json({
+      status: 'healthy',
+      platform: 'SyncView',
+      authProvider: serverAuthProvider.name,
+      isProductionAuth: serverAuthProvider.isProductionReady,
+      timestamp: Date.now(),
+    });
+  });
+
+  // Auth provider status & missing production configuration disclosure
+  app.get('/api/auth/status', (_req: Request, res: Response) => {
+    res.json({
+      providerId: serverAuthProvider.id,
+      providerName: serverAuthProvider.name,
+      isProductionReady: serverAuthProvider.isProductionReady,
+      missingConfiguration: serverAuthProvider.getMissingProductionConfig(),
+      documentation: 'To deploy to live users, configure Firebase Auth (verifyIdToken) or Google OAuth.',
+    });
+  });
+
+  // Download full source code as zip
+  app.get('/api/download-source', (_req: Request, res: Response) => {
+    const zipPath = path.resolve(__dirname, 'public/syncview-source.zip');
+    res.download(zipPath, 'syncview-source.zip', (err) => {
+      if (err && !res.headersSent) {
+        res.status(404).json({ error: 'Source bundle not found on server' });
       }
-      source = SAMPLE_SOURCES.find((s) => s.id === sourceId.trim());
-      if (!source) {
-        return res.status(404).json({ error: `Source video with id "${sourceId}" was not found` });
-      }
+    });
+  });
+
+  // Media Stream Proxy & Google Drive Resolution (Supports Range Requests 206)
+  app.get('/api/media/stream', handleMediaStream);
+  app.get('/api/media/inspect', handleMediaInspect);
+
+  // Catalogue API
+  app.get('/api/catalogue/sources', (_req: Request, res: Response) => {
+    res.json(SAMPLE_SOURCES);
+  });
+
+  app.get('/api/catalogue/reactions', (req: Request, res: Response) => {
+    const sourceId = req.query.sourceId as string;
+    if (sourceId) {
+      const filtered = SAMPLE_REACTIONS.filter((r) => r.sourceId === sourceId);
+      return res.json(filtered);
     }
+    res.json(SAMPLE_REACTIONS);
+  });
 
-    // 2. Resolve reaction
-    if (!primaryReaction) {
-      if (!reactionId || typeof reactionId !== 'string' || !reactionId.trim()) {
-        return res.status(400).json({ error: 'Missing or invalid required field: reactionId' });
-      }
-      primaryReaction = SAMPLE_REACTIONS.find((r) => r.id === reactionId.trim());
-      if (!primaryReaction) {
-        return res.status(404).json({ error: `Reaction video with id "${reactionId}" was not found` });
-      }
+  // Watch Party API
+
+  // Browse active watch parties
+  app.get('/api/parties', async (_req: Request, res: Response) => {
+    try {
+      const allRooms = await partyManager.getAllRooms();
+      res.json(allRooms);
+    } catch {
+      res.status(500).json({ error: 'Failed to retrieve active parties' });
     }
+  });
 
-    // 3. Confirm selected reaction belongs to selected source
-    if (primaryReaction.sourceId !== source.id) {
-      return res.status(400).json({
-        error: `Mismatched reaction: Reaction "${primaryReaction.id}" is mapped to source "${primaryReaction.sourceId}", not "${source.id}"`,
-      });
-    }
+  // Create a new room with strict input validation
+  app.post('/api/parties', async (req: Request, res: Response) => {
+    try {
+      const {
+        title,
+        hostName,
+        sourceId,
+        reactionId,
+        additionalReactionIds,
+        source: directSource,
+        reaction: directReaction,
+        additionalReactions: directAdditional,
+      } = req.body || {};
 
-    // 4. Validate additional reaction IDs or objects
-    const additional: ReactionVideo[] = [];
-    if (Array.isArray(directAdditional)) {
-      additional.push(...directAdditional.slice(0, 4));
-    } else if (additionalReactionIds !== undefined) {
-      if (!Array.isArray(additionalReactionIds)) {
-        return res.status(400).json({ error: 'additionalReactionIds must be an array of strings' });
+      let source: VideoSource | undefined;
+      let primaryReaction: ReactionVideo | undefined;
+
+      // 1. Resolve & validate source
+      if (directSource !== undefined) {
+        const srcValidation = validateAndSanitizeSource(directSource);
+        if (!srcValidation.valid || !srcValidation.source) {
+          return res.status(400).json({ error: srcValidation.error });
+        }
+        source = srcValidation.source;
+      } else {
+        if (!sourceId || typeof sourceId !== 'string' || !sourceId.trim()) {
+          return res.status(400).json({ error: 'Missing or invalid required field: sourceId' });
+        }
+        source = SAMPLE_SOURCES.find((s) => s.id === sourceId.trim());
+        if (!source) {
+          return res.status(404).json({ error: `Source video with id "${sourceId}" was not found` });
+        }
       }
-      if (additionalReactionIds.length > 4) {
-        return res.status(400).json({ error: 'A maximum of 4 additional reactions can be added' });
-      }
-      for (const extraId of additionalReactionIds) {
-        if (typeof extraId !== 'string' || !extraId.trim()) {
-          return res.status(400).json({ error: 'Invalid extra reaction id format' });
+
+      // 2. Resolve & validate primary reaction
+      if (directReaction !== undefined) {
+        const rxValidation = validateAndSanitizeReaction(directReaction, source.id);
+        if (!rxValidation.valid || !rxValidation.reaction) {
+          return res.status(400).json({ error: rxValidation.error });
         }
-        const cleanExtraId = extraId.trim();
-        if (cleanExtraId === primaryReaction.id) {
-          return res.status(400).json({ error: 'Additional reaction cannot be identical to primary reaction' });
+        primaryReaction = rxValidation.reaction;
+      } else {
+        if (!reactionId || typeof reactionId !== 'string' || !reactionId.trim()) {
+          return res.status(400).json({ error: 'Missing or invalid required field: reactionId' });
         }
-        const extraRx = SAMPLE_REACTIONS.find((r) => r.id === cleanExtraId);
-        if (!extraRx) {
-          return res.status(404).json({ error: `Additional reaction with id "${cleanExtraId}" was not found` });
+        primaryReaction = SAMPLE_REACTIONS.find((r) => r.id === reactionId.trim());
+        if (!primaryReaction) {
+          return res.status(404).json({ error: `Reaction video with id "${reactionId}" was not found` });
         }
-        if (extraRx.sourceId !== source.id) {
+        if (primaryReaction.sourceId !== source.id) {
           return res.status(400).json({
-            error: `Additional reaction "${cleanExtraId}" does not belong to source "${source.id}"`,
+            error: `Mismatched reaction: Reaction "${primaryReaction.id}" is mapped to source "${primaryReaction.sourceId}", not "${source.id}"`,
           });
         }
-        if (!additional.some((a) => a.id === extraRx.id)) {
-          additional.push(extraRx);
+      }
+
+      // 3. Validate additional reaction IDs or objects
+      const additional: ReactionVideo[] = [];
+      if (directAdditional !== undefined) {
+        if (!Array.isArray(directAdditional)) {
+          return res.status(400).json({ error: 'additionalReactions must be an array' });
         }
+        if (directAdditional.length > 4) {
+          return res.status(400).json({ error: 'A maximum of 4 additional reactions can be added' });
+        }
+        for (const extraObj of directAdditional) {
+          const extraValidation = validateAndSanitizeReaction(extraObj, source.id);
+          if (!extraValidation.valid || !extraValidation.reaction) {
+            return res.status(400).json({ error: extraValidation.error });
+          }
+          if (extraValidation.reaction.id === primaryReaction.id) {
+            return res.status(400).json({ error: 'Additional reaction cannot be identical to primary reaction' });
+          }
+          if (!additional.some((a) => a.id === extraValidation.reaction!.id)) {
+            additional.push(extraValidation.reaction);
+          }
+        }
+      } else if (additionalReactionIds !== undefined) {
+        if (!Array.isArray(additionalReactionIds)) {
+          return res.status(400).json({ error: 'additionalReactionIds must be an array of strings' });
+        }
+        if (additionalReactionIds.length > 4) {
+          return res.status(400).json({ error: 'A maximum of 4 additional reactions can be added' });
+        }
+        for (const extraId of additionalReactionIds) {
+          if (typeof extraId !== 'string' || !extraId.trim()) {
+            return res.status(400).json({ error: 'Invalid extra reaction id format' });
+          }
+          const cleanExtraId = extraId.trim();
+          if (cleanExtraId === primaryReaction.id) {
+            return res.status(400).json({ error: 'Additional reaction cannot be identical to primary reaction' });
+          }
+          const extraRx = SAMPLE_REACTIONS.find((r) => r.id === cleanExtraId);
+          if (!extraRx) {
+            return res.status(404).json({ error: `Additional reaction with id "${cleanExtraId}" was not found` });
+          }
+          if (extraRx.sourceId !== source.id) {
+            return res.status(400).json({
+              error: `Additional reaction "${cleanExtraId}" does not belong to source "${source.id}"`,
+            });
+          }
+          if (!additional.some((a) => a.id === extraRx.id)) {
+            additional.push(extraRx);
+          }
+        }
+      } else {
+        // Default auto-populated extras belonging to the same source (only when matching sample source)
+        const autoExtras = SAMPLE_REACTIONS.filter(
+          (r) => r.sourceId === source!.id && r.id !== primaryReaction!.id
+        ).slice(0, 4);
+        additional.push(...autoExtras);
       }
-    } else {
-      // Default auto-populated extras belonging to the same source
-      const autoExtras = SAMPLE_REACTIONS.filter(
-        (r) => r.sourceId === source.id && r.id !== primaryReaction.id
-      ).slice(0, 4);
-      additional.push(...autoExtras);
+
+      // 4. Validate and sanitize title
+      let cleanTitle = `${primaryReaction.creator}'s Watch Party`;
+      if (title !== undefined) {
+        if (typeof title !== 'string' || !title.trim()) {
+          return res.status(400).json({ error: 'Room title cannot be empty if specified' });
+        }
+        if (title.trim().length > 80) {
+          return res.status(400).json({ error: 'Room title exceeds maximum length of 80 characters' });
+        }
+        cleanTitle = sanitizeHtml(title.trim());
+      }
+
+      // 5. Validate and sanitize host display name
+      let cleanHostName = 'Host';
+      if (req.user) {
+        cleanHostName = req.user.name;
+      } else if (hostName !== undefined) {
+        if (typeof hostName !== 'string' || !hostName.trim()) {
+          return res.status(400).json({ error: 'Host name cannot be empty if specified' });
+        }
+        if (hostName.trim().length > 30) {
+          return res.status(400).json({ error: 'Host name exceeds maximum length of 30 characters' });
+        }
+        cleanHostName = sanitizeHtml(hostName.trim());
+      }
+
+      const { room, hostToken, participantToken } = await partyManager.createRoom({
+        title: cleanTitle,
+        hostName: cleanHostName,
+        sourceVideo: source,
+        primaryReaction,
+        additionalReactions: additional,
+      });
+
+      // Return room and private credentials (ONLY on initial creation)
+      res.status(201).json({
+        room,
+        hostToken,
+        participantToken,
+      });
+    } catch (err) {
+      console.error('Error creating watch party:', err);
+      res.status(500).json({ error: 'Failed to create watch party' });
     }
-
-    // 7. Validate and sanitize title
-    let cleanTitle = `${primaryReaction.creator}'s Watch Party`;
-    if (title !== undefined) {
-      if (typeof title !== 'string' || !title.trim()) {
-        return res.status(400).json({ error: 'Room title cannot be empty if specified' });
-      }
-      if (title.trim().length > 80) {
-        return res.status(400).json({ error: 'Room title exceeds maximum length of 80 characters' });
-      }
-      cleanTitle = sanitizeHtml(title.trim());
-    }
-
-    // 8. Validate and sanitize host display name
-    let cleanHostName = 'Host';
-    if (req.user) {
-      cleanHostName = req.user.name;
-    } else if (hostName !== undefined) {
-      if (typeof hostName !== 'string' || !hostName.trim()) {
-        return res.status(400).json({ error: 'Host name cannot be empty if specified' });
-      }
-      if (hostName.trim().length > 30) {
-        return res.status(400).json({ error: 'Host name exceeds maximum length of 30 characters' });
-      }
-      cleanHostName = sanitizeHtml(hostName.trim());
-    }
-
-    const { room, hostToken, participantToken } = await partyManager.createRoom({
-      title: cleanTitle,
-      hostName: cleanHostName,
-      sourceVideo: source,
-      primaryReaction,
-      additionalReactions: additional,
-    });
-
-    // Return room and private credentials (ONLY on initial creation)
-    res.status(201).json({
-      room,
-      hostToken,
-      participantToken,
-    });
-  } catch (err) {
-    console.error('Error creating watch party:', err);
-    res.status(500).json({ error: 'Failed to create watch party' });
-  }
-});
+  });
 
 // Get room details by ID or 6-digit Code (Safe view - hostToken NEVER exposed)
 app.get('/api/parties/:id', validateRoomParam, async (req: Request, res: Response) => {
@@ -495,17 +713,22 @@ app.post('/api/reactions/export-csv', (req: Request, res: Response) => {
   res.send(csv);
 });
 
-app.post('/api/reactions/import-csv', (req: Request, res: Response) => {
-  const csvText = req.body?.csv || '';
-  const anchors = importAnchorsFromCsv(csvText);
-  res.json({ success: true, anchors });
-});
+  app.post('/api/reactions/import-csv', (req: Request, res: Response) => {
+    const csvText = req.body?.csv || '';
+    const anchors = importAnchorsFromCsv(csvText);
+    res.json({ success: true, anchors });
+  });
+
+  return app;
+}
 
 // ==========================================
 // Vite Integration & Static Serving
 // ==========================================
 
 async function startServer() {
+  const app = createSyncViewApp();
+
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
@@ -525,7 +748,9 @@ async function startServer() {
   });
 }
 
-startServer().catch((err) => {
-  console.error('Failed to start server:', err);
-  process.exit(1);
-});
+if (process.env.SYNCVIEW_DISABLE_AUTO_LISTEN !== '1') {
+  startServer().catch((err) => {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  });
+}

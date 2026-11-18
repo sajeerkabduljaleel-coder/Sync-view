@@ -37,6 +37,9 @@ import {
   FileVideo,
   Globe,
   Lock,
+  PictureInPicture,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 import {
   VideoSource,
@@ -46,6 +49,7 @@ import {
   ReactionNote,
   ChatMessage,
   SyncAnchor,
+  WatchPartyParticipant,
 } from '../../types';
 import { SessionSyncController, SessionSyncState } from '../../services/SessionSyncController';
 import { VideoPlayer } from './VideoPlayer';
@@ -88,6 +92,13 @@ interface TheatreProps {
     extraReactions: ReactionVideo[];
   }) => void;
   onJoinPartyByCode?: (code: string) => void;
+  onCreateParty?: (
+    source: VideoSource,
+    reaction: ReactionVideo,
+    extraReactions?: ReactionVideo[]
+  ) => void;
+  joinPartyError?: string | null;
+  onClearJoinPartyError?: () => void;
 }
 
 export function Theatre({
@@ -102,6 +113,9 @@ export function Theatre({
   onOpenCreatorStudio,
   onStreamsChanged,
   onJoinPartyByCode,
+  onCreateParty,
+  joinPartyError,
+  onClearJoinPartyError,
 }: TheatreProps) {
   // Sync controller instance (authoritative engine)
   const controllerRef = useRef<SessionSyncController | null>(null);
@@ -111,6 +125,16 @@ export function Theatre({
   const [primaryReaction, setPrimaryReaction] = useState<ReactionVideo | null>(initialPrimaryReaction || null);
   const [extraReactions, setExtraReactions] = useState<ReactionVideo[]>(initialExtraReactions);
   const [syncState, setSyncState] = useState<SessionSyncState | null>(null);
+
+  // Authoritative watch-party host & participant tracking
+  const [localHostToken, setLocalHostToken] = useState<string | undefined>(hostToken);
+  const [effectiveIsHost, setEffectiveIsHost] = useState<boolean>(isHost);
+  const [partyParticipants, setPartyParticipants] = useState<WatchPartyParticipant[]>([]);
+  const [partyHostId, setPartyHostId] = useState<string>('');
+  const [partyActionMessage, setPartyActionMessage] = useState<string | null>(null);
+  const [noteActionError, setNoteActionError] = useState<string | null>(null);
+  const [playerVolumes, setPlayerVolumes] = useState<Record<string, number>>({});
+  const [manualMutedIds, setManualMutedIds] = useState<Record<string, boolean>>({});
 
   // Stream Chooser & Blank Canvas State
   const [isStreamChooserOpen, setIsStreamChooserOpen] = useState(false);
@@ -169,8 +193,8 @@ export function Theatre({
   const [countdownCount, setCountdownCount] = useState<number | null>(null);
   const isCountingDown = countdownCount !== null;
 
-  // Compute session-level sync capability across all active media streams
-  const sessionCapability = React.useMemo(() => {
+  // Compute baseline session sync capability; overridden by live registered adapter capabilities once mounted
+  const fallbackCapability = React.useMemo(() => {
     const caps: SyncCapability[] = [];
     if (sourceVideo?.url) {
       caps.push(detectMediaProvider(sourceVideo.url, sourceVideo.isLocalFile).syncCapability);
@@ -185,6 +209,8 @@ export function Theatre({
     });
     return computeSessionSyncCapability(caps);
   }, [sourceVideo, primaryReaction, extraReactions]);
+
+  const effectiveCapability = syncState?.sessionCapability || fallbackCapability;
 
   const handleStartCountdownCue = () => {
     if (isCountingDown) return;
@@ -203,62 +229,84 @@ export function Theatre({
 
   // Sync state if props change from outside
   useEffect(() => {
-    if (initialSourceVideo) setSourceVideo(initialSourceVideo);
-    if (initialPrimaryReaction) {
-      setPrimaryReaction(initialPrimaryReaction);
-      setActiveNotes(initialPrimaryReaction.notes || []);
-    }
-    if (initialExtraReactions) setExtraReactions(initialExtraReactions);
+    setSourceVideo(initialSourceVideo || null);
+    setPrimaryReaction(initialPrimaryReaction || null);
+    setActiveNotes(initialPrimaryReaction?.notes || []);
+    setExtraReactions(initialExtraReactions || []);
   }, [initialSourceVideo, initialPrimaryReaction, initialExtraReactions]);
 
-  // Watch Party live sync polling
   useEffect(() => {
-    if (!roomCode) return;
+    setLocalHostToken(hostToken);
+    setEffectiveIsHost(Boolean(isHost));
+  }, [hostToken, isHost, roomCode]);
 
-    let isMounted = true;
-    const fetchPartyState = async () => {
+  const fetchLatestPartyAndSync = React.useCallback(
+    async (forceResync = false) => {
+      if (!roomCode) return;
       try {
         const res = await fetch(`/api/parties/${roomCode}`);
         if (!res.ok) return;
         const data = await res.json();
         const room = data.room;
-        if (!isMounted || !room) return;
+        if (!room) return;
 
-        if (room.chatMessages) {
-          setChatMessages(room.chatMessages);
-        }
-        if (room.notes) {
-          setActiveNotes(room.notes);
-        }
+        if (room.chatMessages) setChatMessages(room.chatMessages);
+        if (room.notes) setActiveNotes(room.notes);
+        if (Array.isArray(room.participants)) setPartyParticipants(room.participants);
+        if (room.hostId) setPartyHostId(room.hostId);
 
-        // If not host, synchronize to host's authoritative playback state
-        if (!isHost && room.playbackState && controllerRef.current) {
+        if (!effectiveIsHost && room.playbackState && controllerRef.current) {
           const serverSeq = room.playbackState.seq;
-          if (serverSeq > lastServerSeqRef.current) {
-            lastServerSeqRef.current = serverSeq;
-            const estimatedTime = data.estimatedSourceTime ?? room.playbackState.sourceTime;
+          const estimatedTime = data.estimatedSourceTime ?? room.playbackState.sourceTime;
+          const localTime = controllerRef.current.getSourceTime();
+          const driftExceeded =
+            room.playbackState.isPlaying && Math.abs(localTime - estimatedTime) > 1.8;
+
+          if (forceResync || serverSeq > lastServerSeqRef.current || driftExceeded) {
+            lastServerSeqRef.current = Math.max(lastServerSeqRef.current, serverSeq);
             controllerRef.current.seekToSourceTime(estimatedTime);
             if (room.playbackState.isPlaying) {
-              controllerRef.current.play();
+              await controllerRef.current.play();
             } else {
               controllerRef.current.pause();
             }
           }
         }
       } catch {}
+    },
+    [roomCode, effectiveIsHost]
+  );
+
+  // Reset sequence counter and poll watch party state
+  useEffect(() => {
+    lastServerSeqRef.current = 0;
+    setPartyActionMessage(null);
+    setNoteActionError(null);
+    if (!roomCode) {
+      setPartyParticipants([]);
+      setPartyHostId('');
+      setChatMessages([]);
+      return;
+    }
+
+    let isMounted = true;
+    const poll = async () => {
+      if (!isMounted) return;
+      await fetchLatestPartyAndSync(false);
     };
 
-    fetchPartyState();
-    const interval = setInterval(fetchPartyState, 2500);
+    poll();
+    const interval = setInterval(poll, 2500);
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
-  }, [roomCode, isHost]);
+  }, [roomCode, fetchLatestPartyAndSync]);
 
-  // Initialize Controller whenever source and primary reaction are available
+  // Initialize Controller once when source session becomes active (preserved across primary reactor swaps)
+  const hasActiveSession = Boolean(sourceVideo && primaryReaction);
   useEffect(() => {
-    if (!sourceVideo || !primaryReaction) {
+    if (!hasActiveSession || !sourceVideo || !primaryReaction) {
       if (controllerRef.current) {
         controllerRef.current.destroy();
         controllerRef.current = null;
@@ -270,10 +318,8 @@ export function Theatre({
     const controller = new SessionSyncController();
     controllerRef.current = controller;
 
-    // Set initial reaction and anchors
     controller.setActiveReaction(primaryReaction.id);
     controller.setReactionAnchors(primaryReaction.id, primaryReaction.anchors || []);
-
     extraReactions.forEach((rx) => {
       controller.setReactionAnchors(rx.id, rx.anchors || []);
     });
@@ -285,10 +331,13 @@ export function Theatre({
     return () => {
       unsubscribe();
       controller.destroy();
+      if (controllerRef.current === controller) {
+        controllerRef.current = null;
+      }
     };
-  }, [sourceVideo?.id, primaryReaction?.id]);
+  }, [hasActiveSession, sourceVideo?.id]);
 
-  // Update anchors when reactions change
+  // Update active primary reaction and anchors in-place without recreating controller
   useEffect(() => {
     if (controllerRef.current && primaryReaction) {
       controllerRef.current.setActiveReaction(primaryReaction.id);
@@ -301,19 +350,30 @@ export function Theatre({
 
   const handlePlayToggle = async () => {
     if (!controllerRef.current) return;
-    const willPlay = !syncState?.isPlaying;
-    controllerRef.current.togglePlay();
+    if (roomCode && !effectiveIsHost) {
+      setPartyActionMessage('Only the Watch Party host controls playback. Use "Re-sync to Host" if needed.');
+      return;
+    }
 
-    if (roomCode && isHost && hostToken) {
+    const willPlay = !controllerRef.current.getState().isPlaying;
+    if (willPlay) {
+      await controllerRef.current.play();
+    } else {
+      controllerRef.current.pause();
+    }
+
+    const actualPlaying = controllerRef.current.getState().isPlaying;
+
+    if (roomCode && effectiveIsHost && localHostToken) {
       try {
         await fetch(`/api/parties/${roomCode}/command`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-host-token': hostToken,
+            'x-host-token': localHostToken,
           },
           body: JSON.stringify({
-            command: willPlay ? 'play' : 'pause',
+            command: actualPlaying ? 'play' : 'pause',
             sourceTime: controllerRef.current.getSourceTime(),
           }),
         });
@@ -324,15 +384,19 @@ export function Theatre({
   };
 
   const handleSeek = async (time: number) => {
+    if (roomCode && !effectiveIsHost) {
+      setPartyActionMessage('Only the Watch Party host can seek the timeline.');
+      return;
+    }
     controllerRef.current?.seekToSourceTime(time);
 
-    if (roomCode && isHost && hostToken) {
+    if (roomCode && effectiveIsHost && localHostToken) {
       try {
         await fetch(`/api/parties/${roomCode}/command`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-host-token': hostToken,
+            'x-host-token': localHostToken,
           },
           body: JSON.stringify({
             command: 'seek',
@@ -342,6 +406,38 @@ export function Theatre({
       } catch (err) {
         console.warn('Failed to broadcast seek command:', err);
       }
+    }
+  };
+
+  const handleReassignHost = async (targetParticipantId: string, targetName: string) => {
+    if (!roomCode || !effectiveIsHost || !localHostToken) return;
+    setPartyActionMessage(null);
+    try {
+      const res = await fetch(`/api/parties/${roomCode}/reassign-host`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-host-token': localHostToken,
+        },
+        body: JSON.stringify({ targetParticipantId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPartyActionMessage(data.error || 'Failed to transfer host privileges.');
+        return;
+      }
+      setEffectiveIsHost(false);
+      setLocalHostToken(undefined);
+      try {
+        sessionStorage.setItem(
+          `syncview_party_creds_${roomCode.toUpperCase()}`,
+          JSON.stringify({ participantToken })
+        );
+      } catch {}
+      setPartyActionMessage(`Host transferred to ${targetName}.`);
+      await fetchLatestPartyAndSync(false);
+    } catch {
+      setPartyActionMessage('Network error while transferring host.');
     }
   };
 
@@ -361,10 +457,10 @@ export function Theatre({
 
   const handleRemoveExtraReactor = (rxId: string) => {
     setExtraReactions((prev) => prev.filter((r) => r.id !== rxId));
+    controllerRef.current?.registerReactionAdapter(rxId, null);
   };
 
   const handleSwapPrimaryReactor = (newPrimary: ReactionVideo) => {
-    // Current primary becomes an extra reactor
     const oldPrimary = primaryReaction;
     const remainingExtras = extraReactions.filter((r) => r.id !== newPrimary.id);
     setPrimaryReaction(newPrimary);
@@ -391,23 +487,29 @@ export function Theatre({
           },
           body: JSON.stringify({ text }),
         });
+        const payload = await res.json().catch(() => ({}));
         if (res.ok) {
-          const msg: ChatMessage = await res.json();
-          setChatMessages((prev) => [...prev, msg]);
+          setChatMessages((prev) => [...prev, payload as ChatMessage]);
           setNewChatText('');
+          setPartyActionMessage(null);
           return;
         }
-      } catch {}
+        setPartyActionMessage(payload.error || 'Could not send chat message.');
+        return;
+      } catch {
+        setPartyActionMessage('Network error sending message.');
+        return;
+      }
     }
 
     const msg: ChatMessage = {
       id: `msg-${Date.now()}`,
       senderId: 'user-me',
-      senderName: isHost ? 'You (Host)' : 'You',
+      senderName: effectiveIsHost ? 'You (Host)' : 'You',
       avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80',
       text,
       timestamp: Date.now(),
-      isHost,
+      isHost: effectiveIsHost,
     };
     setChatMessages((prev) => [...prev, msg]);
     setNewChatText('');
@@ -425,6 +527,7 @@ export function Theatre({
     e.preventDefault();
     const text = newNoteText.trim();
     if (!text) return;
+    setNoteActionError(null);
     const curSourceTime = syncState?.sourceTime || 0;
     const curRxTime = syncState?.primaryReactionTime || 0;
 
@@ -442,13 +545,18 @@ export function Theatre({
             text,
           }),
         });
+        const payload = await res.json().catch(() => ({}));
         if (res.ok) {
-          const note: ReactionNote = await res.json();
-          setActiveNotes((prev) => [note, ...prev]);
+          setActiveNotes((prev) => [payload as ReactionNote, ...prev]);
           setNewNoteText('');
           return;
         }
-      } catch {}
+        setNoteActionError(payload.error || 'Failed to add note.');
+        return;
+      } catch {
+        setNoteActionError('Network error while adding note.');
+        return;
+      }
     }
 
     const note: ReactionNote = {
@@ -461,14 +569,21 @@ export function Theatre({
       isPublic: true,
       createdAt: Date.now(),
     };
-    setActiveNotes((prev) => [note, ...prev]);
+    const nextNotes = [note, ...activeNotes];
+    setActiveNotes(nextNotes);
     setNewNoteText('');
+    if (primaryReaction) {
+      const updatedReaction = { ...primaryReaction, notes: nextNotes };
+      setPrimaryReaction(updatedReaction);
+      void catalogueService.saveReaction(updatedReaction);
+    }
   };
 
   const handleDeleteNote = async (noteId: string) => {
+    setNoteActionError(null);
     if (roomCode) {
       const headers: Record<string, string> = {};
-      if (hostToken) headers['x-host-token'] = hostToken;
+      if (localHostToken) headers['x-host-token'] = localHostToken;
       if (participantToken) headers['x-participant-token'] = participantToken;
       try {
         const res = await fetch(`/api/parties/${roomCode}/notes/${noteId}`, {
@@ -479,9 +594,41 @@ export function Theatre({
           setActiveNotes((prev) => prev.filter((n) => n.id !== noteId));
           return;
         }
-      } catch {}
+        const errData = await res.json().catch(() => ({}));
+        setNoteActionError(errData.error || 'Only the note author or room host can delete this note.');
+        return;
+      } catch {
+        setNoteActionError('Network error while trying to delete note.');
+        return;
+      }
     }
-    setActiveNotes((prev) => prev.filter((n) => n.id !== noteId));
+    const nextNotes = activeNotes.filter((n) => n.id !== noteId);
+    setActiveNotes(nextNotes);
+    if (primaryReaction) {
+      const updatedReaction = { ...primaryReaction, notes: nextNotes };
+      setPrimaryReaction(updatedReaction);
+      void catalogueService.saveReaction(updatedReaction);
+    }
+  };
+
+  const getEffectiveVolume = (playerId: string, isSourcePlayer: boolean): number => {
+    const base = playerVolumes[playerId] ?? 1.0;
+    if (!syncState) return base;
+    if (isSourcePlayer) {
+      if (syncState.audioFocus === 'source') return base;
+      if (syncState.isDuckingEnabled) return Math.min(base, 0.25);
+      return 0;
+    }
+    return syncState.audioFocus === playerId ? base : 0;
+  };
+
+  const getEffectiveMuted = (playerId: string, isSourcePlayer: boolean): boolean => {
+    if (manualMutedIds[playerId]) return true;
+    if (!syncState) return !isSourcePlayer;
+    if (isSourcePlayer) {
+      return syncState.audioFocus !== 'source' && !syncState.isDuckingEnabled;
+    }
+    return syncState.audioFocus !== playerId;
   };
 
   const formatTime = (secs: number) => {
@@ -531,6 +678,20 @@ export function Theatre({
       quickSourceMode === 'file' ? (localSourceUrl || quickSourceUrl) : quickSourceUrl;
 
     if (!effectiveSourceUrl.trim() || !quickReactionUrl.trim()) {
+      setIsStreamChooserOpen(true);
+      return;
+    }
+
+    if (quickSourceMode === 'url') {
+      const srcCheck = validateUrlInput(effectiveSourceUrl);
+      if (!srcCheck.isValid) {
+        setIsStreamChooserOpen(true);
+        return;
+      }
+    }
+
+    const rxCheck = validateUrlInput(quickReactionUrl);
+    if (!rxCheck.isValid) {
       setIsStreamChooserOpen(true);
       return;
     }
@@ -857,14 +1018,17 @@ export function Theatre({
                           type="url"
                           value={quickSourceUrl}
                           onChange={(e) => setQuickSourceUrl(e.target.value)}
-                          placeholder="Source Video Stream URL (or Google Drive link)"
+                          placeholder="Source URL (MP4, YouTube, or Google Drive link)"
                           className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
                         />
-                        {isGoogleDriveUrl(quickSourceUrl) && (
-                          <div className="text-[10px] text-indigo-400 flex items-center gap-1 px-1">
-                            <span>Google Drive link detected &bull; Must be shared as &quot;Anyone with the link can view&quot;</span>
-                          </div>
-                        )}
+                        {quickSourceUrl.trim() && (() => {
+                          const info = detectMediaProvider(quickSourceUrl);
+                          return (
+                            <div className="text-[10px] text-indigo-400 flex items-center gap-1 px-1 truncate">
+                              <span>{info.name} &bull; {info.badgeText}</span>
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
 
@@ -873,14 +1037,17 @@ export function Theatre({
                         type="url"
                         value={quickReactionUrl}
                         onChange={(e) => setQuickReactionUrl(e.target.value)}
-                        placeholder="Reaction Video Stream URL (or Google Drive link)"
+                        placeholder="Reaction URL (MP4, YouTube, Drive, or Patreon)"
                         className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
                       />
-                      {isGoogleDriveUrl(quickReactionUrl) && (
-                        <div className="text-[10px] text-indigo-400 flex items-center gap-1 px-1">
-                          <span>Google Drive link detected &bull; Must be shared as &quot;Anyone with the link can view&quot;</span>
-                        </div>
-                      )}
+                      {quickReactionUrl.trim() && (() => {
+                        const info = detectMediaProvider(quickReactionUrl);
+                        return (
+                          <div className="text-[10px] text-indigo-400 flex items-center gap-1 px-1 truncate">
+                            <span>{info.name} &bull; {info.badgeText}</span>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -924,6 +1091,26 @@ export function Theatre({
           onClose={() => setIsStreamChooserOpen(false)}
           onLaunchStreams={handleLaunchChosenStreams}
         />
+
+        {/* Watch Party Join Error Banner */}
+        {joinPartyError && (
+          <div className="fixed bottom-5 right-5 z-50 max-w-md bg-rose-950/95 border border-rose-500/50 text-rose-100 rounded-2xl p-4 shadow-2xl flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+            <div className="flex-1 text-xs">
+              <div className="font-bold text-rose-200">Could Not Join Watch Party</div>
+              <p className="text-rose-300/90 mt-0.5">{joinPartyError}</p>
+            </div>
+            {onClearJoinPartyError && (
+              <button
+                onClick={onClearJoinPartyError}
+                className="text-rose-300 hover:text-white p-1"
+                aria-label="Dismiss error"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Join Watch Party Dialog */}
         {isPartyInputOpen && (
@@ -974,10 +1161,11 @@ export function Theatre({
   // 2. ACTIVE SYNCHRONIZED THEATRE VIEW
   // ========================================================
   const currentSourceTime = syncState?.sourceTime || 0;
-  const currentDuration = sourceVideo?.duration || 180;
+  const knownSourceDuration = syncState?.sourceDuration ?? null;
+  const sliderMaxDuration = knownSourceDuration || sourceVideo?.duration || 100;
   const currentLayout = syncState?.layout || 'side-by-side';
   const isAdvanced = syncState?.isAdvancedMode || false;
-  const primaryStatus = syncState?.primaryStatus || 'synced';
+  const primaryStatus = syncState?.primaryStatus || 'paused';
 
   return (
     <div className="relative min-h-screen bg-[#07090e] text-slate-100 flex flex-col font-sans">
@@ -1028,6 +1216,28 @@ export function Theatre({
             <RotateCcw className="w-3 h-3" />
             <span>Blank Canvas</span>
           </button>
+          {!roomCode && onCreateParty && (
+            <button
+              onClick={() => {
+                if (sourceVideo.isLocalFile || primaryReaction.isLocalFile) {
+                  setPartyActionMessage(
+                    'Local files play in your browser only and cannot be streamed to remote Watch Party guests.'
+                  );
+                  return;
+                }
+                onCreateParty(sourceVideo, primaryReaction, extraReactions);
+              }}
+              className="hidden sm:flex items-center gap-1.5 text-xs text-purple-200 hover:text-white px-2.5 py-1 rounded-lg bg-purple-600/30 border border-purple-500/40 hover:bg-purple-600/50 transition-colors cursor-pointer"
+              title={
+                sourceVideo.isLocalFile || primaryReaction.isLocalFile
+                  ? 'Local browser files cannot be streamed to remote Watch Party guests'
+                  : 'Create a synchronized Watch Party from these streams'
+              }
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span>Start Watch Party</span>
+            </button>
+          )}
         </div>
 
         {/* Sync Status Badge & Mode Switcher */}
@@ -1037,14 +1247,27 @@ export function Theatre({
               <Users className="w-3.5 h-3.5 text-purple-400" />
               <span className="text-slate-400">Party Code:</span>
               <span className="font-mono font-bold text-purple-300">{roomCode}</span>
+              <span
+                className={`ml-1 text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                  effectiveIsHost
+                    ? 'bg-purple-500/20 text-purple-200'
+                    : 'bg-slate-800 text-slate-300'
+                }`}
+              >
+                {effectiveIsHost ? 'Host' : 'Guest'}
+              </span>
             </div>
           )}
 
-          {/* Sync status pill */}
+          {/* Honest Sync status pill */}
           <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 px-3 py-1 rounded-full text-xs">
             <span
               className={`w-2 h-2 rounded-full ${
-                primaryStatus === 'synced'
+                syncState?.hasPlayerErrors || primaryStatus === 'error'
+                  ? 'bg-rose-500'
+                  : effectiveCapability.capability === 'manual_sync' || primaryStatus === 'manual'
+                  ? 'bg-amber-400'
+                  : primaryStatus === 'synced'
                   ? 'bg-emerald-400 animate-pulse'
                   : primaryStatus === 'adjusting'
                   ? 'bg-amber-400'
@@ -1053,12 +1276,21 @@ export function Theatre({
                   : 'bg-indigo-400'
               }`}
             />
-            <span className="font-medium text-slate-300 capitalize">{primaryStatus}</span>
-            {isAdvanced && syncState?.primaryMetrics && (
-              <span className="text-[10px] font-mono text-slate-400 ml-1">
-                {(syncState.primaryMetrics.currentDrift * 1000).toFixed(0)}ms
-              </span>
-            )}
+            <span className="font-medium text-slate-300 capitalize">
+              {syncState?.hasPlayerErrors || primaryStatus === 'error'
+                ? 'Stream Error'
+                : effectiveCapability.capability === 'manual_sync' || primaryStatus === 'manual'
+                ? 'Manual Sync'
+                : primaryStatus}
+            </span>
+            {isAdvanced &&
+              syncState?.primaryMetrics &&
+              primaryStatus !== 'manual' &&
+              primaryStatus !== 'error' && (
+                <span className="text-[10px] font-mono text-slate-400 ml-1">
+                  {(syncState.primaryMetrics.currentDrift * 1000).toFixed(0)}ms
+                </span>
+              )}
           </div>
 
           {/* Basic vs Advanced Mode Toggle */}
@@ -1120,6 +1352,16 @@ export function Theatre({
               >
                 Reactor Focus
               </button>
+              <button
+                onClick={() => controllerRef.current?.setLayout('pip')}
+                className={`px-2 py-1 rounded flex items-center gap-1 ${
+                  currentLayout === 'pip' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                }`}
+                title="Picture-in-Picture overlay"
+              >
+                <PictureInPicture className="w-3 h-3" />
+                <span>PiP</span>
+              </button>
             </div>
 
             {/* Audio Focus Selector */}
@@ -1143,7 +1385,7 @@ export function Theatre({
           </div>
 
           {/* Manual Sync Coordination Banner */}
-          {sessionCapability.capability === 'manual_sync' && (
+          {effectiveCapability.capability === 'manual_sync' && (
             <div className="bg-amber-950/40 border border-amber-500/40 rounded-xl p-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs shadow-lg">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
@@ -1155,14 +1397,13 @@ export function Theatre({
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">
                       Target Reaction Cue:{' '}
                       {formatTime(
-                        syncState?.primaryMetrics
-                          ? syncState.sourceTime + (primaryReaction.introDuration || 0)
-                          : syncState?.sourceTime || 0
+                        syncState?.manualTargetTimes?.[primaryReaction.id] ??
+                          (syncState?.sourceTime || 0) + (primaryReaction.introDuration || 0)
                       )}
                     </span>
                   </div>
                   <p className="text-[11px] text-amber-300/80 mt-0.5">
-                    External playback is active (e.g. Patreon). Use the countdown cue to synchronize with the external stream.
+                    {effectiveCapability.guidanceText}
                   </p>
                 </div>
               </div>
@@ -1179,22 +1420,38 @@ export function Theatre({
             </div>
           )}
 
+          {/* Watch Party Feedback Banner */}
+          {partyActionMessage && (
+            <div className="bg-purple-950/50 border border-purple-500/40 text-purple-100 rounded-xl px-3 py-2 text-xs flex items-center justify-between gap-3">
+              <span>{partyActionMessage}</span>
+              <button
+                onClick={() => setPartyActionMessage(null)}
+                className="text-purple-300 hover:text-white"
+                aria-label="Dismiss notice"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* Video Grid based on layout */}
           <div
             className={`w-full flex-1 min-h-[420px] gap-3 ${
-              currentLayout === 'side-by-side'
+              currentLayout === 'pip'
+                ? 'relative flex flex-col'
+                : currentLayout === 'side-by-side'
                 ? 'grid grid-cols-1 md:grid-cols-2'
                 : currentLayout === 'grid'
                 ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
-                : currentLayout === 'source-focus'
-                ? 'grid grid-cols-1 lg:grid-cols-3'
                 : 'grid grid-cols-1 lg:grid-cols-3'
             }`}
           >
             {/* 1. Source Video Player */}
             <div
               className={`${
-                currentLayout === 'source-focus'
+                currentLayout === 'pip'
+                  ? 'w-full flex-1 min-h-[360px]'
+                  : currentLayout === 'source-focus'
                   ? 'lg:col-span-2'
                   : currentLayout === 'reactor-focus'
                   ? 'lg:col-span-1'
@@ -1212,13 +1469,24 @@ export function Theatre({
                 }
                 isSource={true}
                 isLocalFile={sourceVideo.isLocalFile}
-                isMuted={syncState?.audioFocus !== 'source' && !syncState?.isDuckingEnabled}
-                syncStatus="Master"
+                isMuted={getEffectiveMuted('source', true)}
+                volume={getEffectiveVolume('source', true)}
+                canTogglePlay={!roomCode || effectiveIsHost}
+                onToggleMute={() =>
+                  setManualMutedIds((prev) => ({ ...prev, source: !prev.source }))
+                }
+                onVolumeChange={(val) =>
+                  setPlayerVolumes((prev) => ({ ...prev, source: val }))
+                }
+                syncStatus={syncState?.playerStatuses?.source?.hasError ? 'error' : 'Master'}
                 targetTimestamp={syncState?.sourceTime || 0}
                 onTogglePlay={handlePlayToggle}
                 onTogglePip={() => controllerRef.current?.togglePictureInPicture()}
+                onAdapterChange={(adapter) => {
+                  controllerRef.current?.registerSourceAdapter(adapter);
+                }}
                 ref={(inst) => {
-                  if (inst) controllerRef.current?.registerSourceElement(inst.getElement());
+                  if (inst) controllerRef.current?.registerSourceAdapter(inst.getAdapter());
                 }}
                 className="w-full h-full"
               />
@@ -1227,7 +1495,9 @@ export function Theatre({
             {/* 2. Primary Reaction Player */}
             <div
               className={`${
-                currentLayout === 'reactor-focus'
+                currentLayout === 'pip'
+                  ? 'md:w-72 lg:w-80 md:absolute md:bottom-4 md:right-4 z-20 shadow-2xl rounded-xl overflow-hidden'
+                  : currentLayout === 'reactor-focus'
                   ? 'lg:col-span-2'
                   : currentLayout === 'source-focus'
                   ? 'lg:col-span-1'
@@ -1246,66 +1516,105 @@ export function Theatre({
                 avatar={primaryReaction.avatar}
                 isPrimary={true}
                 isLocalFile={primaryReaction.isLocalFile}
-                isMuted={syncState?.audioFocus !== primaryReaction.id}
+                isMuted={getEffectiveMuted(primaryReaction.id, false)}
+                volume={getEffectiveVolume(primaryReaction.id, false)}
+                canTogglePlay={!roomCode || effectiveIsHost}
+                onToggleMute={() =>
+                  setManualMutedIds((prev) => ({
+                    ...prev,
+                    [primaryReaction.id]: !prev[primaryReaction.id],
+                  }))
+                }
+                onVolumeChange={(val) =>
+                  setPlayerVolumes((prev) => ({ ...prev, [primaryReaction.id]: val }))
+                }
                 syncStatus={primaryStatus}
                 playbackRate={syncState?.primaryMetrics?.playbackRate || 1.0}
                 targetTimestamp={
-                  syncState?.primaryMetrics
-                    ? syncState.sourceTime + (primaryReaction.introDuration || 0)
-                    : syncState?.sourceTime || 0
+                  syncState?.manualTargetTimes?.[primaryReaction.id] ??
+                  (syncState?.sourceTime || 0) + (primaryReaction.introDuration || 0)
                 }
                 onTogglePlay={handlePlayToggle}
                 onTogglePip={() => controllerRef.current?.togglePictureInPicture()}
+                onAdapterChange={(adapter) => {
+                  controllerRef.current?.registerReactionAdapter(primaryReaction.id, adapter);
+                }}
                 ref={(inst) => {
-                  if (inst)
-                    controllerRef.current?.registerReactionElement(
+                  if (inst) {
+                    controllerRef.current?.registerReactionAdapter(
                       primaryReaction.id,
-                      inst.getElement()
+                      inst.getAdapter()
                     );
+                  }
                 }}
                 className="w-full h-full"
               />
             </div>
 
             {/* 3. Additional Reactors (Up to 4 extra) */}
-            {extraReactions.map((rx) => (
-              <div key={rx.id} className="relative flex flex-col">
-                <VideoPlayer
-                  id={rx.id}
-                  src={rx.url}
-                  title={rx.title}
-                  subtitle={rx.creator}
-                  avatar={rx.avatar}
-                  isMuted={syncState?.audioFocus !== rx.id}
-                  syncStatus={syncState?.extraReactorMetrics[rx.id]?.status || 'synced'}
-                  playbackRate={syncState?.extraReactorMetrics[rx.id]?.playbackRate || 1.0}
-                  targetTimestamp={(syncState?.sourceTime || 0) + (rx.introDuration || 0)}
-                  onTogglePlay={handlePlayToggle}
-                  ref={(inst) => {
-                    if (inst)
-                      controllerRef.current?.registerReactionElement(rx.id, inst.getElement());
-                  }}
-                  className="w-full h-full"
-                />
-                {/* Reactor action pill */}
-                <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
-                  <button
-                    onClick={() => handleSwapPrimaryReactor(rx)}
-                    className="text-[10px] bg-slate-900/90 hover:bg-indigo-600 text-slate-200 hover:text-white px-2 py-0.5 rounded border border-slate-700 transition-colors"
-                    title="Make this reactor primary"
-                  >
-                    Set Primary
-                  </button>
-                  <button
-                    onClick={() => handleRemoveExtraReactor(rx.id)}
-                    className="p-1 bg-slate-900/90 hover:bg-rose-600 text-slate-400 hover:text-white rounded border border-slate-700 transition-colors"
-                    title="Remove reactor"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
-                </div>
+            {extraReactions.length > 0 && (
+              <div
+                className={
+                  currentLayout === 'pip'
+                    ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3'
+                    : 'contents'
+                }
+              >
+                {extraReactions.map((rx) => (
+                  <div key={rx.id} className="relative flex flex-col">
+                    <VideoPlayer
+                      id={rx.id}
+                      src={rx.url}
+                      title={rx.title}
+                      subtitle={rx.creator}
+                      avatar={rx.avatar}
+                      isMuted={getEffectiveMuted(rx.id, false)}
+                      volume={getEffectiveVolume(rx.id, false)}
+                      canTogglePlay={!roomCode || effectiveIsHost}
+                      onToggleMute={() =>
+                        setManualMutedIds((prev) => ({ ...prev, [rx.id]: !prev[rx.id] }))
+                      }
+                      onVolumeChange={(val) =>
+                        setPlayerVolumes((prev) => ({ ...prev, [rx.id]: val }))
+                      }
+                      syncStatus={syncState?.extraReactorMetrics[rx.id]?.status || 'paused'}
+                      playbackRate={syncState?.extraReactorMetrics[rx.id]?.playbackRate || 1.0}
+                      targetTimestamp={
+                        syncState?.manualTargetTimes?.[rx.id] ??
+                        (syncState?.sourceTime || 0) + (rx.introDuration || 0)
+                      }
+                      onTogglePlay={handlePlayToggle}
+                      onAdapterChange={(adapter) => {
+                        controllerRef.current?.registerReactionAdapter(rx.id, adapter);
+                      }}
+                      ref={(inst) => {
+                        if (inst) {
+                          controllerRef.current?.registerReactionAdapter(rx.id, inst.getAdapter());
+                        }
+                      }}
+                      className="w-full h-full"
+                    />
+                    {/* Reactor action pill */}
+                    <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
+                      <button
+                        onClick={() => handleSwapPrimaryReactor(rx)}
+                        className="text-[10px] bg-slate-900/90 hover:bg-indigo-600 text-slate-200 hover:text-white px-2 py-0.5 rounded border border-slate-700 transition-colors"
+                        title="Make this reactor primary"
+                      >
+                        Set Primary
+                      </button>
+                      <button
+                        onClick={() => handleRemoveExtraReactor(rx.id)}
+                        className="p-1 bg-slate-900/90 hover:bg-rose-600 text-slate-400 hover:text-white rounded border border-slate-700 transition-colors"
+                        title="Remove reactor"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
 
           {/* Authoritative Playback Scrub Bar & Transport Controls */}
@@ -1319,41 +1628,44 @@ export function Theatre({
                 <input
                   type="range"
                   min="0"
-                  max={currentDuration}
+                  max={sliderMaxDuration}
                   step="0.1"
-                  value={currentSourceTime}
+                  value={Math.min(currentSourceTime, sliderMaxDuration)}
                   onChange={(e) => handleSeek(parseFloat(e.target.value))}
-                  className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                  disabled={Boolean(roomCode && !effectiveIsHost)}
+                  className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 accent-indigo-500"
                   aria-label="Seek source timeline"
                 />
                 {/* Chapters tick markers on scrubber */}
                 {primaryReaction.chapters.map((ch) => (
                   <div
                     key={ch.id}
-                    style={{ left: `${(ch.sourceTimestamp / currentDuration) * 100}%` }}
+                    style={{ left: `${(ch.sourceTimestamp / sliderMaxDuration) * 100}%` }}
                     className="absolute top-0 w-1 h-3 bg-amber-400/80 rounded-full -translate-y-1 pointer-events-none"
                     title={`Chapter: ${ch.title}`}
                   />
                 ))}
               </div>
               <span className="font-mono text-xs text-slate-400 w-12">
-                {formatTime(currentDuration)}
+                {knownSourceDuration !== null ? formatTime(knownSourceDuration) : '--:--'}
               </span>
             </div>
 
             {/* Transport Buttons Bar */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleSeek(Math.max(0, currentSourceTime - 10))}
-                  className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
-                  title="Rewind 10 seconds"
+                  disabled={Boolean(roomCode && !effectiveIsHost)}
+                  className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 transition-colors"
+                  title={roomCode && !effectiveIsHost ? 'Host controls playback' : 'Rewind 10 seconds'}
                 >
                   <RotateCcw className="w-4 h-4" />
                 </button>
                 <button
                   onClick={handlePlayToggle}
-                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all"
+                  disabled={Boolean(roomCode && !effectiveIsHost)}
+                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-400 disabled:shadow-none disabled:cursor-not-allowed text-white font-medium flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all"
                   aria-label={syncState?.isPlaying ? 'Pause synchronized playback' : 'Play synchronized playback'}
                 >
                   {syncState?.isPlaying ? (
@@ -1369,12 +1681,30 @@ export function Theatre({
                   )}
                 </button>
                 <button
-                  onClick={() => handleSeek(Math.min(currentDuration, currentSourceTime + 10))}
-                  className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
-                  title="Forward 10 seconds"
+                  onClick={() => handleSeek(Math.min(sliderMaxDuration, currentSourceTime + 10))}
+                  disabled={Boolean(roomCode && !effectiveIsHost)}
+                  className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 transition-colors"
+                  title={roomCode && !effectiveIsHost ? 'Host controls playback' : 'Forward 10 seconds'}
                 >
                   <RotateCw className="w-4 h-4" />
                 </button>
+
+                {roomCode && !effectiveIsHost && (
+                  <div className="flex items-center gap-2 ml-1">
+                    <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold text-amber-300 bg-amber-950/50 border border-amber-500/30 px-2 py-1 rounded-md">
+                      <Lock className="w-3 h-3" />
+                      Host Controls Playback
+                    </span>
+                    <button
+                      onClick={() => fetchLatestPartyAndSync(true)}
+                      className="px-2.5 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/30 text-purple-200 text-xs font-medium flex items-center gap-1 transition-colors"
+                      title="Force local player to match host timestamp"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>Re-sync to Host</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Offset nudge buttons (for micro adjustment in Theatre) */}
@@ -1618,6 +1948,18 @@ export function Theatre({
                   description="Notes are mapped to the timeline. When you click a note, SyncView jumps to that exact moment in both the source and reaction videos."
                 />
 
+                {noteActionError && (
+                  <div className="p-2 rounded-lg bg-rose-950/70 border border-rose-500/40 text-rose-300 text-[11px] flex items-center justify-between gap-2">
+                    <span>{noteActionError}</span>
+                    <button
+                      onClick={() => setNoteActionError(null)}
+                      className="text-rose-200 hover:text-white shrink-0"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+
                 {activeNotes.length === 0 ? (
                   <p className="text-xs text-slate-500 text-center py-6">
                     No notes yet. Add a note at the current timestamp below!
@@ -1692,6 +2034,46 @@ export function Theatre({
                   {burst.emoji}
                 </div>
               ))}
+
+              {roomCode && partyParticipants.length > 0 && (
+                <div className="mb-2.5 p-2 rounded-lg bg-slate-900/80 border border-slate-800 space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-slate-300">
+                    <span className="flex items-center gap-1.5">
+                      <Users className="w-3 h-3 text-purple-400" />
+                      Participants ({partyParticipants.length})
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">{roomCode}</span>
+                  </div>
+                  <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
+                    {partyParticipants.map((p) => {
+                      const isParticipantHost = p.isHost || p.id === partyHostId;
+                      return (
+                        <div
+                          key={p.id}
+                          className="flex items-center justify-between text-[11px] py-0.5"
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-slate-200 truncate">{p.name}</span>
+                            {isParticipantHost && (
+                              <span className="text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1 rounded">
+                                HOST
+                              </span>
+                            )}
+                          </div>
+                          {effectiveIsHost && !isParticipantHost && (
+                            <button
+                              onClick={() => handleReassignHost(p.id, p.name)}
+                              className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-purple-600 text-slate-300 hover:text-white transition-colors shrink-0"
+                            >
+                              Make Host
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-2 overflow-y-auto flex-1 pr-1">
                 {chatMessages.map((msg) => (

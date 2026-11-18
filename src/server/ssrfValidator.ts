@@ -17,34 +17,68 @@ export interface DestinationValidationResult {
 }
 
 /**
+/**
+ * Expands any valid IPv6 literal (compressed ::, uppercase, leading zeros, or embedded dotted IPv4)
+ * into its 8 canonical 16-bit integer groups. Returns null if invalid or scoped with zone ID.
+ */
+function parseIpv6Words(ip: string): number[] | null {
+  if (!ip || ip.includes('%')) return null;
+
+  let working = ip.toLowerCase();
+
+  // Convert trailing embedded IPv4 (e.g. ::ffff:127.0.0.1 or 0:0:0:0:0:ffff:10.0.0.1) into two hex words
+  const lastColon = working.lastIndexOf(':');
+  if (lastColon !== -1 && working.slice(lastColon + 1).includes('.')) {
+    const v4Str = working.slice(lastColon + 1);
+    if (!net.isIPv4(v4Str)) return null;
+    const octets = v4Str.split('.').map((o) => parseInt(o, 10));
+    const w1 = ((octets[0] << 8) | octets[1]).toString(16);
+    const w2 = ((octets[2] << 8) | octets[3]).toString(16);
+    working = working.slice(0, lastColon + 1) + `${w1}:${w2}`;
+  }
+
+  const doubleColonParts = working.split('::');
+  if (doubleColonParts.length > 2) return null;
+
+  const parseGroups = (seg: string): number[] | null => {
+    if (!seg) return [];
+    const parts = seg.split(':');
+    const out: number[] = [];
+    for (const p of parts) {
+      if (!/^[0-9a-f]{1,4}$/.test(p)) return null;
+      out.push(parseInt(p, 16));
+    }
+    return out;
+  };
+
+  if (doubleColonParts.length === 2) {
+    const left = parseGroups(doubleColonParts[0]);
+    const right = parseGroups(doubleColonParts[1]);
+    if (!left || !right) return null;
+    const missing = 8 - (left.length + right.length);
+    if (missing < 1) return null;
+    return [...left, ...new Array(missing).fill(0), ...right];
+  }
+
+  const words = parseGroups(working);
+  if (!words || words.length !== 8) return null;
+  return words;
+}
+
+function wordsToIpv4(wHigh: number, wLow: number): string {
+  return `${(wHigh >> 8) & 0xff}.${wHigh & 0xff}.${(wLow >> 8) & 0xff}.${wLow & 0xff}`;
+}
+
+/**
  * Checks whether an IPv4 or IPv6 address is in a private, loopback, link-local,
- * cloud metadata, multicast, or reserved range.
+ * cloud metadata, multicast, NAT64, Teredo, 6to4, or reserved range.
  */
 export function isDisallowedIp(ip: string): boolean {
   if (!ip || typeof ip !== 'string') return true;
 
-  const trimmed = ip.trim();
-
-  // Handle IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1 or ::ffff:7f00:1)
-  if (trimmed.startsWith('::ffff:')) {
-    const v4Part = trimmed.substring(7);
-    if (net.isIPv4(v4Part)) {
-      return isDisallowedIp(v4Part);
-    }
-    // Hex IPv4-mapped (e.g. ::ffff:7f00:0001)
-    const hexParts = v4Part.split(':');
-    if (hexParts.length === 2) {
-      const p1 = parseInt(hexParts[0], 16);
-      const p2 = parseInt(hexParts[1], 16);
-      if (!isNaN(p1) && !isNaN(p2)) {
-        const a = (p1 >> 8) & 0xff;
-        const b = p1 & 0xff;
-        const c = (p2 >> 8) & 0xff;
-        const d = p2 & 0xff;
-        return isDisallowedIp(`${a}.${b}.${c}.${d}`);
-      }
-    }
-    return true;
+  let trimmed = ip.trim();
+  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    trimmed = trimmed.slice(1, -1);
   }
 
   // IPv4 Evaluation
@@ -57,111 +91,89 @@ export function isDisallowedIp(ip: string): boolean {
     const [a, b, c, d] = parts;
     const num = ((a << 24) | (b << 16) | (c << 8) | d) >>> 0;
 
-    // 0.0.0.0/8 (Current network)
-    if (a === 0) return true;
-
-    // 10.0.0.0/8 (Private Class A)
-    if (a === 10) return true;
-
-    // 100.64.0.0/10 (Carrier-Grade NAT / Shared)
-    if (a === 100 && b >= 64 && b <= 127) return true;
-
-    // 127.0.0.0/8 (Loopback)
-    if (a === 127) return true;
-
-    // 169.254.0.0/16 (Link-Local, including Cloud Metadata 169.254.169.254)
-    if (a === 169 && b === 254) return true;
-
-    // 172.16.0.0/12 (Private Class B: 172.16.0.0 - 172.31.255.255)
-    if (a === 172 && b >= 16 && b <= 31) return true;
-
-    // 192.0.0.0/24 (IETF Protocol Assignments)
-    if (a === 192 && b === 0 && c === 0) return true;
-
-    // 192.0.2.0/24 (TEST-NET-1)
-    if (a === 192 && b === 0 && c === 2) return true;
-
-    // 192.88.99.0/24 (6to4 Relay Anycast)
-    if (a === 192 && b === 88 && c === 99) return true;
-
-    // 192.168.0.0/16 (Private Class C)
-    if (a === 192 && b === 168) return true;
-
-    // 198.18.0.0/15 (Network Benchmark Testing)
-    if (a === 198 && (b === 18 || b === 19)) return true;
-
-    // 198.51.100.0/24 (TEST-NET-2)
-    if (a === 198 && b === 51 && c === 100) return true;
-
-    // 203.0.113.0/24 (TEST-NET-3)
-    if (a === 203 && b === 0 && c === 113) return true;
-
-    // 224.0.0.0/4 (Multicast: 224.0.0.0 - 239.255.255.255)
-    if (a >= 224 && a <= 239) return true;
-
-    // 240.0.0.0/4 (Reserved for Future Use / Class E)
-    if (a >= 240) return true;
-
-    // 255.255.255.255 (Broadcast)
+    if (a === 0) return true; // 0.0.0.0/8
+    if (a === 10) return true; // 10.0.0.0/8
+    if (a === 100 && b >= 64 && b <= 127) return true; // 100.64.0.0/10 CGNAT
+    if (a === 127) return true; // 127.0.0.0/8 Loopback
+    if (a === 169 && b === 254) return true; // 169.254.0.0/16 Link-local & IMDS
+    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
+    if (a === 192 && b === 0 && c === 0) return true; // 192.0.0.0/24
+    if (a === 192 && b === 0 && c === 2) return true; // 192.0.2.0/24 TEST-NET-1
+    if (a === 192 && b === 88 && c === 99) return true; // 192.88.99.0/24 6to4 relay
+    if (a === 192 && b === 168) return true; // 192.168.0.0/16
+    if (a === 198 && (b === 18 || b === 19)) return true; // 198.18.0.0/15 Benchmark
+    if (a === 198 && b === 51 && c === 100) return true; // 198.51.100.0/24 TEST-NET-2
+    if (a === 203 && b === 0 && c === 113) return true; // 203.0.113.0/24 TEST-NET-3
+    if (a >= 224 && a <= 239) return true; // 224.0.0.0/4 Multicast
+    if (a >= 240) return true; // 240.0.0.0/4 Reserved & Broadcast
     if (num === 0xffffffff) return true;
 
     return false;
   }
 
-  // IPv6 Evaluation
+  // Canonical IPv6 Evaluation (eliminates case, zero-compression, and expanded form bypasses)
   if (net.isIPv6(trimmed)) {
-    const lower = trimmed.toLowerCase();
+    const w = parseIpv6Words(trimmed);
+    if (!w) return true;
 
-    // ::1 (Loopback)
-    if (lower === '::1' || lower === '0:0:0:0:0:0:0:1') return true;
+    const allZeroPrefix5 = w[0] === 0 && w[1] === 0 && w[2] === 0 && w[3] === 0 && w[4] === 0;
 
-    // :: (Unspecified)
-    if (lower === '::' || lower === '0:0:0:0:0:0:0:0') return true;
-
-    // fe80::/10 (Link-local: fe80: - febf:)
-    if (
-      lower.startsWith('fe8') ||
-      lower.startsWith('fe9') ||
-      lower.startsWith('fea') ||
-      lower.startsWith('feb')
-    ) {
+    // :: (Unspecified) and ::1 (Loopback)
+    if (allZeroPrefix5 && w[5] === 0 && w[6] === 0 && (w[7] === 0 || w[7] === 1)) {
       return true;
     }
 
-    // fc00::/7 (Unique Local Address - ULA, private, including AWS IMDS IPv6 fd00:ec2::254)
-    if (lower.startsWith('fc') || lower.startsWith('fd')) {
-      return true;
+    // ::ffff:0:0/96 (IPv4-mapped IPv6, any case/expansion)
+    if (allZeroPrefix5 && w[5] === 0xffff) {
+      return isDisallowedIp(wordsToIpv4(w[6], w[7]));
     }
+
+    // ::/96 (IPv4-compatible IPv6, deprecated)
+    if (allZeroPrefix5 && w[5] === 0) {
+      return isDisallowedIp(wordsToIpv4(w[6], w[7]));
+    }
+
+    // ::ffff:0:0:0/96 (IPv4-translated SIIT)
+    if (w[0] === 0 && w[1] === 0 && w[2] === 0 && w[3] === 0 && w[4] === 0xffff && w[5] === 0) {
+      return isDisallowedIp(wordsToIpv4(w[6], w[7]));
+    }
+
+    // 64:ff9b::/96 (NAT64 well-known) and 64:ff9b:1::/48 (NAT64 local)
+    if (w[0] === 0x0064 && w[1] === 0xff9b) {
+      if (w[2] === 0 && w[3] === 0 && w[4] === 0 && w[5] === 0) {
+        return isDisallowedIp(wordsToIpv4(w[6], w[7]));
+      }
+      if (w[2] === 0x0001) return true;
+    }
+
+    // fe80::/10 (Link-local) & fec0::/10 (Deprecated site-local)
+    if ((w[0] & 0xffc0) === 0xfe80) return true;
+    if ((w[0] & 0xffc0) === 0xfec0) return true;
+
+    // fc00::/7 (Unique Local Address, includes AWS IMDS IPv6 fd00:ec2::254)
+    if ((w[0] & 0xfe00) === 0xfc00) return true;
 
     // ff00::/8 (Multicast)
-    if (lower.startsWith('ff')) return true;
+    if ((w[0] & 0xff00) === 0xff00) return true;
 
-    // 2001:db8::/32 (Documentation)
-    if (lower.startsWith('2001:db8') || lower.startsWith('2001:0db8')) return true;
+    // 2002::/16 (6to4 relay) - check embedded IPv4
+    if (w[0] === 0x2002) {
+      return isDisallowedIp(wordsToIpv4(w[1], w[2]));
+    }
+
+    // 2001::/32 (Teredo tunnel), 2001:db8::/32 (Docs), 2001:2::/48 (Benchmark), 2001:10::/28 & 2001:20::/28
+    if (w[0] === 0x2001) {
+      if (w[1] === 0x0000 || w[1] === 0x0db8 || w[1] === 0x0002) return true;
+      if ((w[1] & 0xfff0) === 0x0010 || (w[1] & 0xfff0) === 0x0020) return true;
+    }
 
     // 100::/64 (Discard prefix)
-    if (lower.startsWith('100:')) return true;
-
-    // 2002::/16 (6to4 Relay) - validate embedded IPv4 address
-    if (lower.startsWith('2002:')) {
-      const hexMatch = lower.match(/^2002:([0-9a-f]{1,4}):([0-9a-f]{1,4})/i);
-      if (hexMatch) {
-        const p1 = parseInt(hexMatch[1], 16);
-        const p2 = parseInt(hexMatch[2], 16);
-        if (!isNaN(p1) && !isNaN(p2)) {
-          const a = (p1 >> 8) & 0xff;
-          const b = p1 & 0xff;
-          const c = (p2 >> 8) & 0xff;
-          const d = p2 & 0xff;
-          if (isDisallowedIp(`${a}.${b}.${c}.${d}`)) return true;
-        }
-      }
-    }
+    if (w[0] === 0x0100 && w[1] === 0 && w[2] === 0 && w[3] === 0) return true;
 
     return false;
   }
 
-  // If not valid IP format, treat as disallowed
+  // Reject anything that is not a recognized valid IP literal
   return true;
 }
 
@@ -322,69 +334,79 @@ export function ssrfGuardedLookup(
   options: any,
   callback: (err: Error | null, address?: any, family?: number) => void
 ): void {
+  let cleanHost = hostname;
+  if (cleanHost.startsWith('[') && cleanHost.endsWith(']')) {
+    cleanHost = cleanHost.slice(1, -1);
+  }
+
   // 1. Direct IP check
-  if (net.isIP(hostname)) {
-    if (isDisallowedIp(hostname)) {
+  const directFamily = net.isIP(cleanHost);
+  if (directFamily) {
+    if (isDisallowedIp(cleanHost)) {
       return callback(new Error('SSRF Blocked: Destination IP is disallowed'));
     }
     if (options && options.all) {
-      return callback(null, [{ address: hostname, family: net.isIP(hostname) }]);
+      return callback(null, [{ address: cleanHost, family: directFamily }]);
     }
-    return callback(null, hostname, net.isIP(hostname));
+    return callback(null, cleanHost, directFamily);
   }
 
   // 2. Obfuscated format check
-  if (containsObfuscatedIpFormat(hostname)) {
+  if (containsObfuscatedIpFormat(cleanHost)) {
     return callback(new Error('SSRF Blocked: Obfuscated IP format'));
   }
 
-  // 3. Resolve all addresses at connect time
-  dns.lookup(hostname, { ...options, all: true } as any, (err: any, addresses: any) => {
+  // 3. Resolve all addresses at connect time (verbatim to preserve raw IPv4/IPv6 values)
+  dns.lookup(cleanHost, { ...options, all: true, verbatim: true } as any, (err: any, addresses: any) => {
     if (err) return callback(err);
     if (!addresses || addresses.length === 0) {
       return callback(new Error('DNS resolution returned no addresses'));
     }
 
     // 4. If ANY address is disallowed, reject the ENTIRE result (prevents mixed DNS rebinding)
+    const validated: Array<{ address: string; family: number }> = [];
     for (const entry of addresses) {
       const ip = typeof entry === 'string' ? entry : entry.address;
-      if (isDisallowedIp(ip)) {
+      const family = (typeof entry === 'object' && entry.family) || net.isIP(ip) || 4;
+      if (!ip || isDisallowedIp(ip)) {
         return callback(
           new Error('SSRF Blocked: Prohibited destination IP in DNS result')
         );
       }
+      validated.push({ address: ip, family });
     }
 
-    // 5. Pass validated addresses to socket connection
+    // 5. Pass only validated addresses directly to the socket connection
     if (options && options.all) {
-      callback(null, addresses);
+      callback(null, validated);
     } else {
-      const first = addresses[0];
-      if (typeof first === 'string') {
-        callback(null, first, 4);
-      } else {
-        callback(null, first.address, first.family);
-      }
+      const first = validated[0];
+      callback(null, first.address, first.family);
     }
   });
 }
 
 /**
  * Dedicated, connection-time SSRF-guarded HTTP and HTTPS agents.
- * All outgoing socket connections resolve DNS through ssrfGuardedLookup,
- * guaranteeing no connection is ever established to prohibited IP ranges.
+ * - keepAlive: false prevents reusing stale sockets across DNS TTL boundaries
+ * - autoSelectFamily: false ensures only the explicitly validated address is dialed
+ * - lookup: ssrfGuardedLookup enforces IP validation at connect time (preserving TLS SNI & hostname check)
  */
 export const ssrfHttpsAgent = new https.Agent({
-  keepAlive: true,
+  keepAlive: false,
+  maxSockets: 50,
   timeout: 10000,
+  autoSelectFamily: false,
   lookup: ssrfGuardedLookup,
-});
+} as https.AgentOptions & { autoSelectFamily?: boolean });
 
 export const ssrfHttpAgent = new http.Agent({
-  keepAlive: true,
+  keepAlive: false,
+  maxSockets: 50,
   timeout: 10000,
+  autoSelectFamily: false,
   lookup: ssrfGuardedLookup,
-});
+} as http.AgentOptions & { autoSelectFamily?: boolean });
 
 /**
  * In-memory sliding window rate limiter for media streaming & inspection requests.
@@ -450,7 +472,8 @@ export interface SafeFetchResponse {
 }
 
 /**
- * Performs a single HTTP/HTTPS request using connection-level SSRF agents.
+ * Performs a single HTTP/HTTPS request using connection-level SSRF agents
+ * and verifies socket.remoteAddress on connect as defense-in-depth.
  */
 function makeGuardedRequest(
   urlStr: string,
@@ -468,12 +491,32 @@ function makeGuardedRequest(
         method: options.method || 'GET',
         headers: options.headers || {},
         agent,
+        autoSelectFamily: false,
         signal: options.signal,
-      },
+      } as https.RequestOptions & { autoSelectFamily?: boolean },
       (res) => {
+        const remoteIp = res.socket?.remoteAddress;
+        if (remoteIp && isDisallowedIp(remoteIp)) {
+          res.destroy();
+          reject(new Error('SSRF Blocked: Upstream connected to a prohibited IP range'));
+          return;
+        }
         resolve({ res, finalUrl: urlStr });
       }
     );
+
+    req.on('socket', (socket) => {
+      const verifyRemoteAddress = () => {
+        if (socket.remoteAddress && isDisallowedIp(socket.remoteAddress)) {
+          socket.destroy(new Error('SSRF Blocked: Upstream socket resolved to a prohibited IP range'));
+        }
+      };
+      if (socket.remoteAddress) {
+        verifyRemoteAddress();
+      } else {
+        socket.once('connect', verifyRemoteAddress);
+      }
+    });
 
     if (options.timeoutMs) {
       req.setTimeout(options.timeoutMs, () => {

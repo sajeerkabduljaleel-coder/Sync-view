@@ -25,9 +25,10 @@ import {
   Globe,
   FileVideo,
   HardDrive,
+  AlertCircle,
 } from 'lucide-react';
 import { ContextualHelp } from '../common/ContextualHelp';
-import { resolvePlayableMediaUrl, isGoogleDriveUrl } from '../../services/mediaResolver';
+import { resolvePlayableMediaUrl, validateUrlInput } from '../../services/mediaResolver';
 import { detectMediaProvider } from '../../services/mediaProviders/mediaProviderRegistry';
 
 function formatBytes(bytes: number): string {
@@ -90,6 +91,7 @@ export function ReactionWizard({ onComplete, onCancel }: ReactionWizardProps) {
 
   // Step 4: Preview & Publish
   const [isPublished, setIsPublished] = useState(true);
+  const [stepError, setStepError] = useState<string | null>(null);
 
   const handleSelectSourceFile = (file: File) => {
     try {
@@ -151,25 +153,79 @@ export function ReactionWizard({ onComplete, onCancel }: ReactionWizardProps) {
   useEffect(() => {
     catalogueService.getSources().then((srcs) => {
       setSavedSources(srcs);
-      if (srcs.length > 0 && !selectedSource) {
-        setSelectedSource(srcs[0]);
-      }
     });
   }, []);
 
   const handleNext = () => {
+    setStepError(null);
+    if (step === 1) {
+      if (!selectedSource) {
+        if (sourceMode === 'file') {
+          if (!sourceFileUrl) {
+            setStepError('Please select a local source video file or switch to Web URL / saved source.');
+            return;
+          }
+        } else {
+          const check = validateUrlInput(sourceUrl);
+          if (!check.isValid) {
+            setStepError(check.error || 'Please enter a valid Source Video URL or select a saved source.');
+            return;
+          }
+        }
+      }
+    } else if (step === 2) {
+      if (reactionMode === 'file') {
+        if (!reactionFileUrl) {
+          setStepError('Please select your local reaction video file or switch to Web URL.');
+          return;
+        }
+      } else {
+        const check = validateUrlInput(reactionUrl);
+        if (!check.isValid) {
+          setStepError(check.error || 'Please enter a valid Reaction Video URL.');
+          return;
+        }
+      }
+      if (!creatorName.trim()) {
+        setStepError('Please enter a Creator Name or Channel before continuing.');
+        return;
+      }
+    }
+
     if (step < 4) setStep((prev) => (prev + 1) as any);
   };
 
   const handleBack = () => {
+    setStepError(null);
     if (step > 1) setStep((prev) => (prev - 1) as any);
   };
 
   const handleFinish = () => {
-    const rawSourceUrl =
-      sourceMode === 'file' && sourceFileUrl
-        ? sourceFileUrl
-        : sourceUrl.trim() || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+    setStepError(null);
+    if (!selectedSource) {
+      if (sourceMode === 'file' && !sourceFileUrl) {
+        setStepError('Source video file is required.');
+        setStep(1);
+        return;
+      }
+      if (sourceMode === 'url' && !validateUrlInput(sourceUrl).isValid) {
+        setStepError('A valid Source Video URL is required.');
+        setStep(1);
+        return;
+      }
+    }
+    if (reactionMode === 'file' && !reactionFileUrl) {
+      setStepError('Reaction video file is required.');
+      setStep(2);
+      return;
+    }
+    if (reactionMode === 'url' && !validateUrlInput(reactionUrl).isValid) {
+      setStepError('A valid Reaction Video URL is required.');
+      setStep(2);
+      return;
+    }
+
+    const rawSourceUrl = sourceMode === 'file' ? sourceFileUrl : sourceUrl.trim();
     const finalSourceUrl = sourceMode === 'file' ? rawSourceUrl : resolvePlayableMediaUrl(rawSourceUrl);
 
     const finalSource: VideoSource = selectedSource || {
@@ -215,19 +271,17 @@ export function ReactionWizard({ onComplete, onCancel }: ReactionWizardProps) {
 
     const duration = finalSource.duration + introDuration + (hasPause ? pauseDuration : 0);
 
-    const rawReactionUrl =
-      reactionMode === 'file' && reactionFileUrl
-        ? reactionFileUrl
-        : reactionUrl.trim() || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+    const rawReactionUrl = reactionMode === 'file' ? reactionFileUrl : reactionUrl.trim();
     const finalReactionUrl = reactionMode === 'file' ? rawReactionUrl : resolvePlayableMediaUrl(rawReactionUrl);
 
+    const safeCreator = creatorName.trim() || 'Reactor';
     const newReaction: ReactionVideo = {
       id: `rx-${Date.now()}`,
       sourceId: finalSource.id,
-      creator: creatorName.trim() || 'Reactor',
-      channelName: `${creatorName.trim() || 'Reactor'} Reacts`,
+      creator: safeCreator,
+      channelName: `${safeCreator} Reacts`,
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80',
-      title: reactionTitle.trim() || (reactionFile ? reactionFile.name : 'Reaction Video'),
+      title: reactionTitle.trim() || (reactionFile ? reactionFile.name : `${safeCreator} Reaction`),
       duration: reactionFileDuration || duration,
       introDuration,
       url: finalReactionUrl,
@@ -807,13 +861,20 @@ export function ReactionWizard({ onComplete, onCancel }: ReactionWizardProps) {
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800">
                 <div className="text-[10px] text-slate-400">Source Video</div>
-                <div className="font-semibold text-white mt-0.5">{selectedSource?.title || sourceTitle || 'Custom Source Stream'}</div>
-                <div className="text-[11px] text-slate-400">{selectedSource?.creator || 'Master Source'}</div>
+                <div className="font-semibold text-white mt-0.5">
+                  {selectedSource?.title || sourceTitle || sourceFile?.name || 'Custom Source Stream'}
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  {selectedSource?.creator ||
+                    (sourceMode === 'file' ? `Local file: ${sourceFile?.name || ''}` : 'Custom Web Stream')}
+                </div>
               </div>
               <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800">
                 <div className="text-[10px] text-slate-400">Reaction Video</div>
-                <div className="font-semibold text-white mt-0.5">{reactionTitle}</div>
-                <div className="text-[11px] text-slate-400">By {creatorName}</div>
+                <div className="font-semibold text-white mt-0.5">
+                  {reactionTitle || reactionFile?.name || `${creatorName || 'Reactor'} Reaction`}
+                </div>
+                <div className="text-[11px] text-slate-400">By {creatorName || 'Reactor'}</div>
               </div>
             </div>
 
@@ -832,6 +893,13 @@ export function ReactionWizard({ onComplete, onCancel }: ReactionWizardProps) {
               <span>Publish immediately to Discover & Explore</span>
             </label>
           </div>
+        </div>
+      )}
+
+      {stepError && (
+        <div className="p-3 rounded-xl bg-rose-950/70 border border-rose-500/40 text-rose-200 text-xs flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+          <span>{stepError}</span>
         </div>
       )}
 

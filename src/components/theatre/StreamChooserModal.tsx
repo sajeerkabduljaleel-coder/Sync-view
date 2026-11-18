@@ -374,7 +374,7 @@ export function StreamChooserModal({
         title: `${er.creator} Reacts to ${cleanSourceTitle}`,
         duration: 320,
         introDuration: Math.max(0, Number(er.introDuration) || 0),
-        url: er.url.trim(),
+        url: resolvePlayableMediaUrl(er.url.trim()),
         thumbnail: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80',
         anchors: [
           {

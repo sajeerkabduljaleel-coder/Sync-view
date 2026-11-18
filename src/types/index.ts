@@ -32,7 +32,9 @@ export type DriftStatus =
   | 'buffering'
   | 'intro'
   | 'break'
-  | 'paused';
+  | 'paused'
+  | 'manual'
+  | 'error';
 
 export interface DriftMetrics {
   currentDrift: number; // in seconds (positive = reaction is ahead of target)

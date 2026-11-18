@@ -17,7 +17,7 @@ import {
   SimpleRateLimiter,
   ssrfGuardedLookup,
 } from '../../server/ssrfValidator';
-import { isPlayableMediaContentType } from '../../server/mediaStreamProxy';
+import { isPlayableMediaContentType, parseValidByteRangeHeader } from '../../server/mediaStreamProxy';
 
 // ---------------------------------------------------------------------------
 // 1. SSRF IP & CIDR Range Enforcement
@@ -467,5 +467,39 @@ test('mediaStreamProxy: rejects non-media responses even when status is 206 Part
   assert.equal(isPlayableMediaContentType('image/svg+xml'), false);
   assert.equal(isPlayableMediaContentType('video/mp4'), true);
   assert.equal(isPlayableMediaContentType('video/webm'), true);
+});
+
+// ---------------------------------------------------------------------------
+// 12. IPv6 Case, Expanded Forms, Zone IDs, NAT64/Teredo, & Inverted Ranges
+// ---------------------------------------------------------------------------
+
+test('ssrfValidator: blocks uppercase, expanded IPv4-mapped, deprecated IPv4-compatible, NAT64, Teredo, and zone-ID IPv6 bypasses', () => {
+  assert.equal(isDisallowedIp('::FFFF:127.0.0.1'), true);
+  assert.equal(isDisallowedIp('0:0:0:0:0:ffff:127.0.0.1'), true);
+  assert.equal(isDisallowedIp('0:0:0:0:0:ffff:169.254.169.254'), true);
+  assert.equal(isDisallowedIp('::127.0.0.1'), true);
+  assert.equal(isDisallowedIp('fe80::1%eth0'), true);
+  assert.equal(isDisallowedIp('::ffff:127.0.0.1%lo0'), true);
+  assert.equal(isDisallowedIp('64:ff9b::127.0.0.1'), true);
+  assert.equal(isDisallowedIp('2001::1'), true);
+  assert.equal(isDisallowedIp('fec0::1'), true);
+  assert.equal(isDisallowedIp('2606:4700:4700::1111'), false);
+});
+
+test('ssrfGuardedLookup: rejects bracketed loopback/private IPv6 literals', (t, done) => {
+  ssrfGuardedLookup('[::1]', {}, (err) => {
+    assert.ok(err);
+    assert.match(err.message, /SSRF Blocked/i);
+    done();
+  });
+});
+
+test('mediaStreamProxy: parseValidByteRangeHeader enforces valid RFC 7233 single-range bounds', () => {
+  assert.deepEqual(parseValidByteRangeHeader('bytes=0-1024'), { valid: true, header: 'bytes=0-1024' });
+  assert.deepEqual(parseValidByteRangeHeader('bytes=512-'), { valid: true, header: 'bytes=512-' });
+  assert.deepEqual(parseValidByteRangeHeader('bytes=-500'), { valid: true, header: 'bytes=-500' });
+  assert.equal(parseValidByteRangeHeader('bytes=1024-500').valid, false);
+  assert.equal(parseValidByteRangeHeader('bytes=-').valid, false);
+  assert.equal(parseValidByteRangeHeader('bytes=0-10,20-30').valid, false);
 });
 

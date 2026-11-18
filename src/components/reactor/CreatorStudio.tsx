@@ -66,9 +66,12 @@ export function CreatorStudio({
   const [newAnchorType, setNewAnchorType] = useState<AnchorType>('linear');
   const [newAnchorLabel, setNewAnchorLabel] = useState('');
 
-  // CSV modal
+  // CSV modal & errors
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
   const [csvText, setCsvText] = useState('');
+  const [csvError, setCsvError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
 
   // Chapter form
   const [chapterTitle, setChapterTitle] = useState('');
@@ -111,18 +114,30 @@ export function CreatorStudio({
   };
 
   const handleOpenCsvImport = () => {
+    setCsvError(null);
     setCsvText(exportAnchorsToCsv(anchors));
     setIsCsvModalOpen(true);
   };
 
   const handleApplyCsv = () => {
+    setCsvError(null);
     try {
       const imported = importAnchorsFromCsv(csvText);
-      if (imported.length > 0) {
-        setAnchors(imported);
-        setIsCsvModalOpen(false);
+      if (imported.length === 0) {
+        setCsvError('No valid anchor rows found in CSV input.');
+        return;
       }
-    } catch {}
+      const csvCheck = validateAnchors(imported);
+      if (!csvCheck.valid) {
+        setCsvError(csvCheck.errors[0] || 'Imported CSV anchors contain invalid timeline values.');
+        return;
+      }
+      setAnchors(imported);
+      setIsCsvModalOpen(false);
+      setSaveError(null);
+    } catch (err: any) {
+      setCsvError(err?.message || 'Failed to parse CSV anchors.');
+    }
   };
 
   const handleAddChapter = (e: React.FormEvent) => {
@@ -142,16 +157,32 @@ export function CreatorStudio({
     setChapters((prev) => prev.filter((c) => c.id !== id));
   };
 
-  const handleSaveAll = () => {
+  const handleSaveAll = (overridePublished?: boolean): boolean => {
+    setSaveError(null);
+    setSaveFeedback(null);
+    const currentCheck = validateAnchors(anchors);
+    if (!currentCheck.valid) {
+      setSaveError(currentCheck.errors[0] || 'Cannot save invalid timeline anchors.');
+      return false;
+    }
     const updated: ReactionVideo = {
       ...reaction,
       anchors,
       chapters,
       highlights,
-      introDuration: anchors[0]?.reactionTime || reaction.introDuration,
+      introDuration: anchors[0]?.reactionTime ?? reaction.introDuration,
+      isPublished: overridePublished !== undefined ? overridePublished : reaction.isPublished,
     };
     setReaction(updated);
     onSave(updated);
+    setSaveFeedback(
+      overridePublished !== undefined
+        ? overridePublished
+          ? 'Reaction published.'
+          : 'Reaction moved to Drafts.'
+        : 'Calibration anchors and chapters saved.'
+    );
+    return true;
   };
 
   const formatTime = (secs: number) => {
@@ -179,11 +210,30 @@ export function CreatorStudio({
           <span className="text-xs text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-0.5 rounded-full font-medium">
             {reaction.creator}
           </span>
+          <span
+            className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${
+              reaction.isPublished
+                ? 'text-emerald-300 bg-emerald-950/50 border-emerald-500/30'
+                : 'text-amber-300 bg-amber-950/50 border-amber-500/30'
+            }`}
+          >
+            {reaction.isPublished ? 'Published' : 'Draft'}
+          </span>
         </div>
 
         <div className="flex items-center gap-2">
           <button
-            onClick={handleSaveAll}
+            onClick={() => handleSaveAll(!reaction.isPublished)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+              reaction.isPublished
+                ? 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-amber-300'
+                : 'bg-emerald-600 hover:bg-emerald-500 border-emerald-500 text-white'
+            }`}
+          >
+            {reaction.isPublished ? 'Unpublish' : 'Publish Reaction'}
+          </button>
+          <button
+            onClick={() => handleSaveAll()}
             className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium flex items-center gap-1.5 shadow-md shadow-indigo-600/30 transition-colors"
           >
             <Save className="w-3.5 h-3.5" />
@@ -191,8 +241,9 @@ export function CreatorStudio({
           </button>
           <button
             onClick={() => {
-              handleSaveAll();
-              onOpenInTheatre({ ...reaction, anchors, chapters, highlights });
+              if (handleSaveAll()) {
+                onOpenInTheatre({ ...reaction, anchors, chapters, highlights });
+              }
             }}
             className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5 transition-colors"
           >
@@ -204,6 +255,18 @@ export function CreatorStudio({
 
       {/* Main Studio Body */}
       <div className="flex-1 p-4 max-w-7xl mx-auto w-full flex flex-col gap-5">
+        {saveError && (
+          <div className="p-3 rounded-xl bg-rose-950/70 border border-rose-500/40 text-rose-200 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>{saveError}</span>
+          </div>
+        )}
+        {saveFeedback && !saveError && (
+          <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{saveFeedback}</span>
+          </div>
+        )}
         <ContextualHelp
           id="creator_studio_intro"
           title="How Calibration Works"
@@ -540,6 +603,12 @@ export function CreatorStudio({
               onChange={(e) => setCsvText(e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 font-mono text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
             />
+            {csvError && (
+              <div className="p-2 rounded-lg bg-rose-950/70 border border-rose-500/40 text-rose-200 text-xs flex items-center gap-2">
+                <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                <span>{csvError}</span>
+              </div>
+            )}
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
               <button
                 onClick={() => setIsCsvModalOpen(false)}

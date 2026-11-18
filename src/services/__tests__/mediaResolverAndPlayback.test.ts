@@ -106,10 +106,20 @@ test('mediaResolver: validates user URL inputs and warns on Google Drive', () =>
   // Blob URL
   assert.equal(validateUrlInput('blob:http://localhost:3000/123-abc').isValid, true);
 
-  // Webpage player links (YouTube, Vimeo)
+  // Valid YouTube, malformed YouTube, Patreon, and Vimeo
   const yt = validateUrlInput('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
-  assert.equal(yt.isValid, false);
-  assert.ok(yt.error?.includes('YouTube'));
+  assert.equal(yt.isValid, true);
+
+  const badYt = validateUrlInput('https://www.youtube.com/channel/UC123');
+  assert.equal(badYt.isValid, false);
+  assert.ok(badYt.error?.includes('YouTube'));
+
+  const patreon = validateUrlInput('https://www.patreon.com/posts/123456');
+  assert.equal(patreon.isValid, true);
+  assert.ok(patreon.warning?.includes('Patreon'));
+
+  const vimeo = validateUrlInput('https://vimeo.com/123456');
+  assert.equal(vimeo.isValid, false);
 
   // Valid Direct MP4
   const mp4 = validateUrlInput('https://commondatastorage.googleapis.com/sample.mp4');
@@ -191,9 +201,12 @@ test('theatreSync: source video plays uninterrupted when reaction stream encount
   // Trigger evaluation cycle
   (controller as any).evaluateSyncCycle();
 
-  // Reaction element must remain in error state without crashing controller
+  // Reaction element must remain in error state and surface session error flags
   assert.equal(mockReaction.paused, true);
-  assert.equal(controller.getState().primaryStatus, 'drifting');
+  assert.equal(controller.getState().primaryStatus, 'error');
+  assert.equal(controller.getState().hasPlayerErrors, true);
+  assert.equal(controller.getState().sessionCapability.hasErrors, true);
+  assert.equal(controller.getState().sessionCapability.isAutomaticSyncAvailable, false);
 
   controller.destroy();
 });

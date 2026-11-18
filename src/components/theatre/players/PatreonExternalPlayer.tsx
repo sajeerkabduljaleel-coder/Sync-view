@@ -3,9 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useImperativeHandle, forwardRef, useState } from 'react';
-import { MediaPlayerElement } from '../../../services/mediaProviders/types';
-import { ExternalLink, Lock, Play, Pause, Compass } from 'lucide-react';
+import React, { useImperativeHandle, forwardRef } from 'react';
+import {
+  MANUAL_ONLY_CAPABILITIES,
+  MediaPlayerAdapter,
+} from '../../../services/mediaProviders/types';
+import { ExternalLink, Lock } from 'lucide-react';
 
 export interface PatreonExternalPlayerProps {
   id: string;
@@ -13,62 +16,50 @@ export interface PatreonExternalPlayerProps {
   title?: string;
   subtitle?: string;
   avatar?: string;
-  targetTimestamp?: number;
+  targetTimestamp?: number | null;
   className?: string;
 }
 
-function formatCueTime(seconds: number): string {
+function formatCueTime(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined || !Number.isFinite(seconds) || seconds < 0) {
+    return '--:--';
+  }
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-export const PatreonExternalPlayer = forwardRef<MediaPlayerElement, PatreonExternalPlayerProps>(
+export function createPatreonExternalAdapter(id: string): MediaPlayerAdapter {
+  return {
+    id,
+    provider: 'patreon',
+    playbackMode: 'external',
+    syncCapability: 'manual_sync',
+    capabilities: MANUAL_ONLY_CAPABILITIES,
+    getCurrentTime: () => null,
+    getDuration: () => null,
+    isPaused: () => null,
+    isBuffering: () => false,
+    getReadyState: () => 0,
+    getError: () => null,
+    getPlaybackRate: () => null,
+    isMuted: () => null,
+    getVolume: () => null,
+    play: async () => false,
+    pause: () => false,
+    seekTo: () => false,
+    setPlaybackRate: () => false,
+    setMuted: () => false,
+    setVolume: () => false,
+  };
+}
+
+export const PatreonExternalPlayer = forwardRef<MediaPlayerAdapter, PatreonExternalPlayerProps>(
   function PatreonExternalPlayer(
     { id, url, title, subtitle, avatar, targetTimestamp = 0, className = '' },
     ref
   ) {
-    const [currentTime, setCurrentTime] = useState(0);
-    const [paused, setPaused] = useState(true);
-
-    useImperativeHandle(ref, () => ({
-      get currentTime() {
-        return currentTime;
-      },
-      set currentTime(val: number) {
-        setCurrentTime(val);
-      },
-      get duration() {
-        return 300;
-      },
-      get paused() {
-        return paused;
-      },
-      get error() {
-        return null;
-      },
-      get readyState() {
-        return 4;
-      },
-      get playbackRate() {
-        return 1.0;
-      },
-      set playbackRate(_val: number) {},
-      get muted() {
-        return false;
-      },
-      set muted(_val: boolean) {},
-      get volume() {
-        return 1.0;
-      },
-      set volume(_val: number) {},
-      play: () => {
-        setPaused(false);
-      },
-      pause: () => {
-        setPaused(true);
-      },
-    }));
+    useImperativeHandle(ref, () => createPatreonExternalAdapter(id), [id]);
 
     return (
       <div
@@ -76,9 +67,9 @@ export const PatreonExternalPlayer = forwardRef<MediaPlayerElement, PatreonExter
       >
         {/* Top Provider Badge */}
         <div className="absolute top-2 left-2 z-10 pointer-events-none">
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-md text-[10px] font-bold text-coral-400 border border-orange-500/30 text-orange-400">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-md text-[10px] font-bold border border-orange-500/30 text-orange-400">
             <Lock className="w-3 h-3" />
-            Patreon &bull; Manual Sync
+            Patreon &bull; External / Manual Sync
           </span>
         </div>
 
@@ -98,10 +89,10 @@ export const PatreonExternalPlayer = forwardRef<MediaPlayerElement, PatreonExter
           {subtitle ? `${subtitle} on Patreon` : 'Membership-protected content'}
         </p>
 
-        {/* Live Synchronization Target Cue Marker */}
+        {/* Live Synchronization Target Cue Marker computed from session timeline */}
         <div className="my-3 px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700/80 flex items-center gap-2 text-xs">
-          <span className="text-slate-400">Target Time on Patreon:</span>
-          <span className="font-mono font-bold text-amber-400">{formatCueTime(targetTimestamp || currentTime)}</span>
+          <span className="text-slate-400">Target Cue on Patreon:</span>
+          <span className="font-mono font-bold text-amber-400">{formatCueTime(targetTimestamp)}</span>
         </div>
 
         <div className="flex items-center gap-2.5">
@@ -117,7 +108,7 @@ export const PatreonExternalPlayer = forwardRef<MediaPlayerElement, PatreonExter
         </div>
 
         <p className="text-[11px] text-slate-400 mt-3 max-w-xs">
-          Open Patreon in a separate tab or window. SyncView provides timeline cues to manually align playback.
+          Patreon hosts playback externally. Open it in another tab and use SyncView timeline cues to align playback.
         </p>
       </div>
     );

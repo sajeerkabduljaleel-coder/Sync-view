@@ -152,11 +152,20 @@ export function validateUrlInput(rawUrl: string): UrlValidationResult {
 
   const trimmed = rawUrl.trim();
 
-  // Allow blob: URLs for local file selection
+  // Allow blob: URLs for local file selection and internal Drive proxy stream paths
   if (trimmed.startsWith('blob:')) {
     return {
       isValid: true,
       isGoogleDrive: false,
+    };
+  }
+
+  if (/^\/api\/media\/stream\?(?:.*&)?driveId=([a-zA-Z0-9_-]{15,})(?:&|$)/i.test(trimmed)) {
+    const match = trimmed.match(/driveId=([a-zA-Z0-9_-]{15,})/i);
+    return {
+      isValid: true,
+      isGoogleDrive: true,
+      fileId: match?.[1],
     };
   }
 
@@ -171,14 +180,51 @@ export function validateUrlInput(rawUrl: string): UrlValidationResult {
 
   try {
     const parsed = new URL(trimmed);
+    const hostname = parsed.hostname.toLowerCase();
 
-    // Reject non-media platforms that cannot be played in HTML5 <video>
-    if (parsed.hostname.includes('youtube.com') || parsed.hostname.includes('youtu.be')) {
+    // YouTube official player support
+    const isYouTubeDomain =
+      hostname === 'youtu.be' ||
+      hostname.endsWith('.youtu.be') ||
+      hostname === 'youtube.com' ||
+      hostname.endsWith('.youtube.com') ||
+      hostname === 'youtube-nocookie.com' ||
+      hostname.endsWith('.youtube-nocookie.com');
+
+    if (isYouTubeDomain) {
+      const vParam = parsed.searchParams.get('v');
+      const shortMatch = hostname.includes('youtu.be')
+        ? parsed.pathname.match(/^\/([a-zA-Z0-9_-]{11})(?:\/|$)/)
+        : null;
+      const pathMatch = parsed.pathname.match(/^\/(?:embed|shorts|live|v)\/([a-zA-Z0-9_-]{11})(?:\/|$)/i);
+      const validId =
+        (vParam && /^[a-zA-Z0-9_-]{11}$/.test(vParam) ? vParam : null) ||
+        shortMatch?.[1] ||
+        pathMatch?.[1] ||
+        null;
+
+      if (!validId) {
+        return {
+          isValid: false,
+          isGoogleDrive: false,
+          error:
+            'YouTube link must include a valid 11-character video ID (e.g. youtube.com/watch?v=... or youtu.be/...).',
+        };
+      }
+
       return {
-        isValid: false,
+        isValid: true,
         isGoogleDrive: false,
-        error:
-          'YouTube links are web player pages, not direct video streams. Please provide a direct MP4/WebM URL or upload a local file.',
+      };
+    }
+
+    // Patreon external playback support
+    if (hostname === 'patreon.com' || hostname.endsWith('.patreon.com')) {
+      return {
+        isValid: true,
+        isGoogleDrive: false,
+        warning:
+          'Patreon content opens in an external tab for creator membership auth; timeline cues will assist with manual sync.',
       };
     }
 
