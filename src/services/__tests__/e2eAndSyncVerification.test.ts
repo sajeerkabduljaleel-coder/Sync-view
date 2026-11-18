@@ -18,11 +18,11 @@ import { WatchPartyManager } from '../watchPartyModel';
 import { SingleInstanceFileWatchPartyRepository } from '../watchPartyRepository';
 import { SessionSyncController } from '../SessionSyncController';
 import { mapSourceToReaction, mapReactionToSource } from '../syncEngine';
-import { MediaPlayerAdapter, PlayerErrorDetail } from '../mediaProviders/types';
+import { MediaPlayerAdapter, PlayerErrorInfo } from '../mediaProviders/types';
 import { SyncAnchor } from '../../types';
 
 // =====================================================================
-// Simulated Realistic MediaPlayerAdapter for Determinstic Sync Profiling
+// Simulated Realistic MediaPlayerAdapter for Deterministic Sync Profiling
 // =====================================================================
 class CalibratedMockAdapter implements MediaPlayerAdapter {
   public readonly id: string;
@@ -31,15 +31,15 @@ class CalibratedMockAdapter implements MediaPlayerAdapter {
   public readonly syncCapability: MediaPlayerAdapter['syncCapability'];
   public readonly capabilities: MediaPlayerAdapter['capabilities'];
 
-  public currentTime = 0;
+  public currentTime: number = 0;
   public duration: number | null;
-  public paused = true;
-  public playbackRate = 1.0;
-  public muted = false;
-  public volume = 1.0;
-  public readyState = 4;
-  public buffering = false;
-  public error: PlayerErrorDetail | null = null;
+  public paused: boolean = true;
+  public playbackRate: number = 1.0;
+  public muted: boolean = false;
+  public volume: number = 1.0;
+  public readyState: number = 4;
+  public buffering: boolean = false;
+  public error: PlayerErrorInfo | null = null;
   public seekHistory: number[] = [];
 
   constructor(
@@ -50,7 +50,7 @@ class CalibratedMockAdapter implements MediaPlayerAdapter {
       syncCapability?: MediaPlayerAdapter['syncCapability'];
       canReadTime?: boolean;
       canControlRate?: boolean;
-      discreteRates?: number[];
+      supportsContinuousRate?: boolean;
       readyState?: number;
     }
   ) {
@@ -58,15 +58,15 @@ class CalibratedMockAdapter implements MediaPlayerAdapter {
     this.provider = opts?.provider ?? 'native';
     this.playbackMode =
       this.provider === 'google_drive'
-        ? 'embedded_preview'
+        ? 'embedded'
         : this.provider === 'patreon'
-        ? 'external_only'
+        ? 'external'
         : this.provider === 'youtube'
-        ? 'embedded_api'
-        : 'native_video';
+        ? 'embedded'
+        : 'native';
     this.syncCapability =
       opts?.syncCapability ??
-      (this.playbackMode === 'native_video' || this.playbackMode === 'embedded_api'
+      (this.playbackMode === 'native' || this.provider === 'youtube'
         ? 'full_sync'
         : 'manual_sync');
     this.duration = opts?.duration === undefined ? 300 : opts.duration;
@@ -80,13 +80,8 @@ class CalibratedMockAdapter implements MediaPlayerAdapter {
       canReadTime: opts?.canReadTime ?? canControl,
       canReadDuration: opts?.canReadTime ?? canControl,
       canControlRate: opts?.canControlRate ?? canControl,
+      supportsContinuousRate: opts?.supportsContinuousRate ?? (this.provider !== 'youtube' && canControl),
       canControlVolume: true,
-      supportedRates: opts?.discreteRates,
-      canDetectBuffer: canControl,
-      canDetectError: true,
-      hasOwnNativeUi: false,
-      supportsAudioFocusDucking: true,
-      supportsPip: this.provider === 'native',
     };
   }
 
@@ -105,8 +100,10 @@ class CalibratedMockAdapter implements MediaPlayerAdapter {
     return true;
   }
 
-  public pause(): void {
+  public pause(): boolean {
+    if (!this.capabilities.canPause) return false;
     this.paused = true;
+    return true;
   }
 
   public seekTo(seconds: number): boolean {
@@ -144,16 +141,18 @@ class CalibratedMockAdapter implements MediaPlayerAdapter {
     return this.volume;
   }
 
-  public setVolume(v: number): void {
+  public setVolume(v: number): boolean {
     this.volume = Math.max(0, Math.min(1, v));
+    return true;
   }
 
   public isMuted(): boolean | null {
     return this.muted;
   }
 
-  public setMuted(m: boolean): void {
+  public setMuted(m: boolean): boolean {
     this.muted = m;
+    return true;
   }
 
   public getReadyState(): number {
@@ -164,7 +163,7 @@ class CalibratedMockAdapter implements MediaPlayerAdapter {
     return this.buffering;
   }
 
-  public getError(): PlayerErrorDetail | null {
+  public getError(): PlayerErrorInfo | null {
     return this.error;
   }
 
@@ -476,18 +475,18 @@ test('E2E HTTP: custom Watch Party creation rejects blob:/XSS URLs and supports 
   // Re-instantiate repository from disk to confirm reload works
   const reloadedRepo = new SingleInstanceFileWatchPartyRepository(path.join(tmpDir, 'parties.json'));
   const reloadedManager = new WatchPartyManager(reloadedRepo);
-  const reloadedRoom = await reloadedManager.getRoomByCode(roomCode);
+  const reloadedRoom = await reloadedManager.getRoom(roomCode);
   assert.ok(reloadedRoom);
   assert.equal(reloadedRoom.playbackState.sourceTime, 42);
   assert.equal(reloadedRoom.hostId, guestParticipant.id);
-  const isNewHostValid = await reloadedManager.verifyHostToken(roomCode, newHostToken);
+  const isNewHostValid = await reloadedManager.isAuthorizedHost(roomCode, newHostToken);
   assert.equal(isNewHostValid, true);
 });
 
 // =====================================================================
 // PART 2: Synchronisation Calibration & Runtime Telemetry Benchmark Suite
 // =====================================================================
-test('Sync Calibration: piecewise anchors, pauses, seeks, buffering recovery, shorter reactions, 6-stream load, and provider switching', async () => {
+test('Sync Calibration: piecewise anchors, pauses, seeks, buffering recovery, shorter reactions, 6-stream load, and provider switching', async (t) => {
   const controller = new SessionSyncController();
 
   // Scenario A: Multi-anchor intro + pause + skip + linear playback accuracy
@@ -545,7 +544,7 @@ test('Sync Calibration: piecewise anchors, pauses, seeks, buffering recovery, sh
   // Scenario D: Buffering stall recovery (2.5s freeze -> stall -> rate resets 1.0 -> recovery)
   await controller.play();
   rxPrimary.buffering = true;
-  rxPrimary.currentTime += 0.35; // gentle drift first to enter 'adjusting' state
+  rxPrimary.currentTime = rxPrimary.currentTime + 0.35; // gentle drift first to enter 'adjusting' state
   controller.evaluateSyncCycle();
   assert.equal(controller.getState().isBuffering, true);
   assert.equal(controller.getState().primaryMetrics.playbackRate, 1.0, 'Rate must reset to 1.0 when buffering');
@@ -559,13 +558,14 @@ test('Sync Calibration: piecewise anchors, pauses, seeks, buffering recovery, sh
   rxPrimary.buffering = false;
   controller.evaluateSyncCycle();
   const postRecoveryState = controller.getState();
+  const recoveryDriftMs = Math.abs(postRecoveryState.primaryMetrics.currentDrift) * 1000;
   assert.ok(
     postRecoveryState.primaryMetrics.correctionCount > hardSeeksBeforeRecovery,
     'Hard seek correction should fire on buffering recovery when drift exceeds threshold'
   );
   assert.ok(
-    Math.abs(postRecoveryState.primaryMetrics.currentDrift) < 0.05,
-    'Drift should return near 0ms immediately after recovery hard seek'
+    recoveryDriftMs < 50,
+    `Drift should return near 0ms immediately after recovery hard seek (got ${recoveryDriftMs.toFixed(1)}ms)`
   );
 
   // Scenario E: Shorter reaction duration clamping (no runaway hard-seek loop when reaction finishes early)
@@ -595,12 +595,20 @@ test('Sync Calibration: piecewise anchors, pauses, seeks, buffering recovery, sh
     const ad = new CalibratedMockAdapter(id, {
       duration: 300,
       provider: idx === 2 ? 'youtube' : 'native',
-      discreteRates: idx === 2 ? [0.5, 0.75, 1, 1.25, 1.5] : undefined,
+      supportsContinuousRate: idx === 2 ? false : true,
     });
     controller.registerReactionAdapter(id, ad);
     controller.setReactionAnchors(id, [{ id: `a-${id}`, sourceTime: 0, reactionTime: idx * 5, type: 'intro' }]);
     return ad;
   });
+
+  t.diagnostic(
+    `Measured Sync Telemetry -> maxDriftMs=${(maxDriftSec * 1000).toFixed(1)}, steadyDriftMs=${(
+      steadyDriftSec * 1000
+    ).toFixed(1)}, postBufferingRecoveryDriftMs=${recoveryDriftMs.toFixed(1)}, shortReactionExtraSeeks=${
+      endShortState.primaryMetrics.correctionCount - initialCorrections
+    }`
+  );
   controller.setActiveReaction('rx-1');
   controller.seekToSourceTime(25);
   await controller.play();

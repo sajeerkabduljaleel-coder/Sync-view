@@ -7,7 +7,7 @@ import express, { Request, Response } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { WatchPartyManager } from './src/services/watchPartyModel';
-import { ReactionVideo } from './src/types';
+import { SyncAnchor, AnchorType, VideoSource, ReactionVideo } from './src/types';
 import { SAMPLE_SOURCES, SAMPLE_REACTIONS } from './src/data/mockCatalogue';
 import { exportAnchorsToCsv, importAnchorsFromCsv } from './src/services/syncEngine';
 import {
@@ -46,8 +46,6 @@ function resolvePort(): number {
   return 3000;
 }
 const port = resolvePort();
-
-import { SyncAnchor, AnchorType, VideoSource, ReactionVideo } from './src/types';
 
 function isSafePartyMediaUrl(rawUrl: unknown): boolean {
   if (typeof rawUrl !== 'string') return false;
