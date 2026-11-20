@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   VideoSource,
   ReactionVideo,
@@ -18,6 +18,8 @@ import {
   validateAnchors,
   mapSourceToReaction,
 } from '../../services/syncEngine';
+import { resolvePlayableMediaUrl } from '../../services/mediaResolver';
+import { detectMediaProvider } from '../../services/mediaProviders/mediaProviderRegistry';
 import {
   Play,
   Pause,
@@ -57,10 +59,57 @@ export function CreatorStudio({
   const [chapters, setChapters] = useState<ReactionChapter[]>(initialReaction.chapters || []);
   const [highlights, setHighlights] = useState<ReactionHighlight[]>(initialReaction.highlights || []);
 
-  // Scrubber times
+  // Scrubber times & live preview refs
   const [sourceTime, setSourceTime] = useState(0);
   const [reactionTime, setReactionTime] = useState(anchors[0]?.reactionTime || 15);
   const [isPlayingTest, setIsPlayingTest] = useState(false);
+  const sourcePreviewRef = useRef<HTMLVideoElement | null>(null);
+  const reactionPreviewRef = useRef<HTMLVideoElement | null>(null);
+
+  const sourceProvider = detectMediaProvider(sourceVideo.url || '', sourceVideo.isLocalFile);
+  const reactionProvider = detectMediaProvider(reaction.url || '', reaction.isLocalFile);
+  const canPlayNativeSourcePreview = Boolean(sourceVideo.url) && sourceProvider.playbackMode === 'native';
+  const canPlayNativeReactionPreview = Boolean(reaction.url) && reactionProvider.playbackMode === 'native';
+
+  useEffect(() => {
+    if (!isPlayingTest) {
+      sourcePreviewRef.current?.pause();
+      reactionPreviewRef.current?.pause();
+      return;
+    }
+
+    if (canPlayNativeSourcePreview && sourcePreviewRef.current) {
+      sourcePreviewRef.current.currentTime = sourceTime;
+      sourcePreviewRef.current.play().catch(() => {});
+    }
+    if (canPlayNativeReactionPreview && reactionPreviewRef.current) {
+      reactionPreviewRef.current.currentTime = reactionTime;
+      reactionPreviewRef.current.play().catch(() => {});
+    }
+
+    const tickInterval = setInterval(() => {
+      setSourceTime((prev) => {
+        const next = Math.min(sourceVideo.duration || 300, +(prev + 0.2).toFixed(1));
+        const mapped = mapSourceToReaction(next, anchors);
+        setReactionTime(Math.min(reaction.duration || 320, +mapped.toFixed(1)));
+        if (next >= (sourceVideo.duration || 300)) {
+          setIsPlayingTest(false);
+        }
+        return next;
+      });
+    }, 200);
+
+    return () => clearInterval(tickInterval);
+  }, [isPlayingTest]);
+
+  const syncScrubPreviewVideos = (nextSource: number, nextReaction: number) => {
+    if (sourcePreviewRef.current && sourcePreviewRef.current.readyState >= 1) {
+      sourcePreviewRef.current.currentTime = nextSource;
+    }
+    if (reactionPreviewRef.current && reactionPreviewRef.current.readyState >= 1) {
+      reactionPreviewRef.current.currentTime = nextReaction;
+    }
+  };
 
   // New anchor form
   const [newAnchorType, setNewAnchorType] = useState<AnchorType>('linear');
@@ -297,14 +346,29 @@ export function CreatorStudio({
               </span>
             </div>
 
-            {/* Video preview simulation */}
+            {/* Real native video preview or provider timeline indicator */}
             <div className="w-full aspect-video bg-black rounded-lg border border-slate-800 flex items-center justify-center relative overflow-hidden">
-              <div className="text-center">
-                <div className="font-mono text-2xl font-bold text-sky-400">
-                  {formatTime(sourceTime)}
+              {canPlayNativeSourcePreview ? (
+                <video
+                  ref={sourcePreviewRef}
+                  src={resolvePlayableMediaUrl(sourceVideo.url)}
+                  muted
+                  playsInline
+                  preload="metadata"
+                  className="w-full h-full object-contain"
+                />
+              ) : (
+                <div className="text-center px-4">
+                  <div className="font-mono text-2xl font-bold text-sky-400">
+                    {formatTime(sourceTime)}
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">
+                    {sourceVideo.url
+                      ? `${sourceProvider.name} timeline scrubbing — open "Test in Theatre" for live provider playback`
+                      : 'Source URL not provided'}
+                  </div>
                 </div>
-                <div className="text-xs text-slate-400 mt-1">Source Video Frame Preview</div>
-              </div>
+              )}
             </div>
 
             {/* Source Time Scrubber */}
@@ -319,9 +383,9 @@ export function CreatorStudio({
                 onChange={(e) => {
                   const val = parseFloat(e.target.value);
                   setSourceTime(val);
-                  // Predict reaction time using existing mapping
                   const mapped = mapSourceToReaction(val, anchors);
                   setReactionTime(mapped);
+                  syncScrubPreviewVideos(val, mapped);
                 }}
                 className="flex-1 h-2 bg-slate-700 rounded appearance-none accent-sky-400 cursor-pointer"
               />
@@ -347,14 +411,29 @@ export function CreatorStudio({
               </span>
             </div>
 
-            {/* Video preview simulation */}
+            {/* Real native video preview or provider timeline indicator */}
             <div className="w-full aspect-video bg-black rounded-lg border border-slate-800 flex items-center justify-center relative overflow-hidden">
-              <div className="text-center">
-                <div className="font-mono text-2xl font-bold text-purple-400">
-                  {formatTime(reactionTime)}
+              {canPlayNativeReactionPreview ? (
+                <video
+                  ref={reactionPreviewRef}
+                  src={resolvePlayableMediaUrl(reaction.url)}
+                  muted
+                  playsInline
+                  preload="metadata"
+                  className="w-full h-full object-contain"
+                />
+              ) : (
+                <div className="text-center px-4">
+                  <div className="font-mono text-2xl font-bold text-purple-400">
+                    {formatTime(reactionTime)}
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">
+                    {reaction.url
+                      ? `${reactionProvider.name} timeline scrubbing — open "Test in Theatre" for live provider playback`
+                      : 'Reaction URL not provided'}
+                  </div>
                 </div>
-                <div className="text-xs text-slate-400 mt-1">Reaction Video Frame Preview</div>
-              </div>
+              )}
             </div>
 
             {/* Reaction Time Scrubber */}
@@ -366,7 +445,11 @@ export function CreatorStudio({
                 max={reaction.duration}
                 step="0.1"
                 value={reactionTime}
-                onChange={(e) => setReactionTime(parseFloat(e.target.value))}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setReactionTime(val);
+                  syncScrubPreviewVideos(sourceTime, val);
+                }}
                 className="flex-1 h-2 bg-slate-700 rounded appearance-none accent-purple-400 cursor-pointer"
               />
               <span className="text-[11px] font-mono text-slate-400 w-10 text-right">
@@ -374,6 +457,30 @@ export function CreatorStudio({
               </span>
             </div>
           </div>
+        </div>
+
+        {/* Synced Preview Playback Bar */}
+        <div className="flex items-center justify-between bg-slate-900/60 border border-slate-800 rounded-xl px-4 py-2.5">
+          <div className="text-xs text-slate-400">
+            Preview mapped timeline synchronization before publishing
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsPlayingTest((p) => !p)}
+            className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            {isPlayingTest ? (
+              <>
+                <Pause className="w-3.5 h-3.5 text-amber-400" />
+                <span>Pause Preview</span>
+              </>
+            ) : (
+              <>
+                <Play className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Preview Synced Playback</span>
+              </>
+            )}
+          </button>
         </div>
 
         {/* Anchor Creation Action Bar */}

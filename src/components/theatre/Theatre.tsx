@@ -132,6 +132,8 @@ export function Theatre({
   const [partyParticipants, setPartyParticipants] = useState<WatchPartyParticipant[]>([]);
   const [partyHostId, setPartyHostId] = useState<string>('');
   const [partyActionMessage, setPartyActionMessage] = useState<string | null>(null);
+  const [partyConnectionError, setPartyConnectionError] = useState<string | null>(null);
+  const hadConnectionLossRef = useRef<boolean>(false);
   const [noteActionError, setNoteActionError] = useState<string | null>(null);
   const [playerVolumes, setPlayerVolumes] = useState<Record<string, number>>({});
   const [manualMutedIds, setManualMutedIds] = useState<Record<string, boolean>>({});
@@ -245,10 +247,27 @@ export function Theatre({
       if (!roomCode) return;
       try {
         const res = await fetch(`/api/parties/${roomCode}`);
-        if (!res.ok) return;
+        if (!res.ok) {
+          hadConnectionLossRef.current = true;
+          if (res.status === 404) {
+            setPartyConnectionError('Watch Party room was closed or is no longer available on the server.');
+          } else {
+            setPartyConnectionError(`Watch Party sync paused (HTTP ${res.status}). Retrying automatically...`);
+          }
+          return;
+        }
         const data = await res.json();
         const room = data.room;
         if (!room) return;
+
+        const recovered = hadConnectionLossRef.current;
+        if (recovered) {
+          hadConnectionLossRef.current = false;
+          setPartyConnectionError(null);
+          setPartyActionMessage('Reconnected to Watch Party — timeline re-synchronized.');
+        } else {
+          setPartyConnectionError(null);
+        }
 
         if (room.chatMessages) setChatMessages(room.chatMessages);
         if (room.notes) setActiveNotes(room.notes);
@@ -262,7 +281,7 @@ export function Theatre({
           const driftExceeded =
             room.playbackState.isPlaying && Math.abs(localTime - estimatedTime) > 1.8;
 
-          if (forceResync || serverSeq > lastServerSeqRef.current || driftExceeded) {
+          if (forceResync || recovered || serverSeq > lastServerSeqRef.current || driftExceeded) {
             lastServerSeqRef.current = Math.max(lastServerSeqRef.current, serverSeq);
             controllerRef.current.seekToSourceTime(estimatedTime);
             if (room.playbackState.isPlaying) {
@@ -272,7 +291,10 @@ export function Theatre({
             }
           }
         }
-      } catch {}
+      } catch {
+        hadConnectionLossRef.current = true;
+        setPartyConnectionError('Connection to Watch Party lost — retrying automatically...');
+      }
     },
     [roomCode, effectiveIsHost]
   );
@@ -280,7 +302,9 @@ export function Theatre({
   // Reset sequence counter and poll watch party state
   useEffect(() => {
     lastServerSeqRef.current = 0;
+    hadConnectionLossRef.current = false;
     setPartyActionMessage(null);
+    setPartyConnectionError(null);
     setNoteActionError(null);
     if (!roomCode) {
       setPartyParticipants([]);
@@ -1420,6 +1444,23 @@ export function Theatre({
             </div>
           )}
 
+          {/* Watch Party Connection Recovery Banner */}
+          {roomCode && partyConnectionError && (
+            <div className="bg-rose-950/60 border border-rose-500/40 text-rose-100 rounded-xl px-3 py-2 text-xs flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{partyConnectionError}</span>
+              </div>
+              <button
+                onClick={() => fetchLatestPartyAndSync(true)}
+                className="px-2.5 py-1 rounded-lg bg-rose-600/30 hover:bg-rose-600/50 border border-rose-400/40 text-rose-100 text-[11px] font-semibold flex items-center gap-1 shrink-0 cursor-pointer"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>Retry Now</span>
+              </button>
+            </div>
+          )}
+
           {/* Watch Party Feedback Banner */}
           {partyActionMessage && (
             <div className="bg-purple-950/50 border border-purple-500/40 text-purple-100 rounded-xl px-3 py-2 text-xs flex items-center justify-between gap-3">
@@ -1759,27 +1800,37 @@ export function Theatre({
                   </div>
                 </div>
                 <div className="bg-slate-900/60 p-2 rounded-lg border border-slate-800">
-                  <div className="text-[10px] text-slate-400">Target Reaction Clock</div>
+                  <div className="text-[10px] text-slate-400">Target Reaction Cue</div>
                   <div className="font-mono font-bold text-white mt-0.5">
-                    {syncState?.primaryMetrics?.targetTime?.toFixed(3) || '0.000'}s
+                    {syncState?.primaryMetrics?.targetTime !== undefined
+                      ? `${syncState.primaryMetrics.targetTime.toFixed(3)}s`
+                      : '--'}
                   </div>
                 </div>
                 <div className="bg-slate-900/60 p-2 rounded-lg border border-slate-800">
                   <div className="text-[10px] text-slate-400">Measured Drift</div>
-                  <div
-                    className={`font-mono font-bold mt-0.5 ${
-                      Math.abs(syncState?.primaryMetrics?.currentDrift || 0) < 0.08
-                        ? 'text-emerald-400'
-                        : 'text-amber-400'
-                    }`}
-                  >
-                    {((syncState?.primaryMetrics?.currentDrift || 0) * 1000).toFixed(1)} ms
-                  </div>
+                  {primaryStatus === 'manual' || primaryStatus === 'error' ? (
+                    <div className="font-mono font-bold text-amber-300 mt-0.5">
+                      N/A ({primaryStatus === 'error' ? 'Stream Error' : 'Manual'})
+                    </div>
+                  ) : (
+                    <div
+                      className={`font-mono font-bold mt-0.5 ${
+                        Math.abs(syncState?.primaryMetrics?.currentDrift || 0) < 0.08
+                          ? 'text-emerald-400'
+                          : 'text-amber-400'
+                      }`}
+                    >
+                      {((syncState?.primaryMetrics?.currentDrift || 0) * 1000).toFixed(1)} ms
+                    </div>
+                  )}
                 </div>
                 <div className="bg-slate-900/60 p-2 rounded-lg border border-slate-800">
                   <div className="text-[10px] text-slate-400">Drift Compensation Rate</div>
                   <div className="font-mono font-bold text-white mt-0.5">
-                    {syncState?.primaryMetrics?.playbackRate.toFixed(2)}x
+                    {primaryStatus === 'manual' || primaryStatus === 'error'
+                      ? '—'
+                      : `${(syncState?.primaryMetrics?.playbackRate ?? 1).toFixed(2)}x`}
                   </div>
                 </div>
               </div>

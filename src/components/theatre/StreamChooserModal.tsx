@@ -135,20 +135,26 @@ export function StreamChooserModal({
         setSourceTitle(initialSource.title);
         setSourceUrl(initialSource.url);
         setSourceCategory(initialSource.category);
-        if (initialSource.isLocalFile) {
-          setSourceMode('file');
-        }
+        setSourceMode(initialSource.isLocalFile ? 'file' : 'url');
       }
       if (initialPrimaryReaction) {
         setReactorName(initialPrimaryReaction.creator);
         setReactionUrl(initialPrimaryReaction.url);
         setIntroOffset(initialPrimaryReaction.introDuration);
-        if (initialPrimaryReaction.isLocalFile) {
-          setReactionMode('file');
-        }
+        setReactionMode(initialPrimaryReaction.isLocalFile ? 'file' : 'url');
+      }
+      if (initialExtraReactions) {
+        setExtraReactors(
+          initialExtraReactions.map((r) => ({
+            id: r.id,
+            creator: r.creator,
+            url: r.url,
+            introDuration: r.introDuration,
+          }))
+        );
       }
     }
-  }, [isOpen, initialSource, initialPrimaryReaction]);
+  }, [isOpen, initialSource, initialPrimaryReaction, initialExtraReactions]);
 
   if (!isOpen) return null;
 

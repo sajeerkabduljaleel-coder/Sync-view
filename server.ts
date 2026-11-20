@@ -746,7 +746,15 @@ async function startServer() {
   });
 }
 
-if (process.env.SYNCVIEW_DISABLE_AUTO_LISTEN !== '1') {
+const isDirectMainExecution =
+  Boolean(process.argv[1]) &&
+  path.resolve(process.argv[1]) === path.resolve(__filename);
+
+if (
+  isDirectMainExecution &&
+  process.env.SYNCVIEW_DISABLE_AUTO_LISTEN !== '1' &&
+  process.env.NODE_ENV !== 'test'
+) {
   startServer().catch((err) => {
     console.error('Failed to start server:', err);
     process.exit(1);

@@ -329,10 +329,25 @@ export async function handleMediaStream(req: Request, res: Response) {
             code: 'GOOGLE_DRIVE_PRIVATE',
           });
         }
+        if (resolved.isNotFound) {
+          res.removeListener('close', onResponseClose);
+          return res.status(404).json({
+            error: resolved.error,
+            code: 'GOOGLE_DRIVE_NOT_FOUND',
+          });
+        }
+        if (resolved.isQuotaExceeded) {
+          res.removeListener('close', onResponseClose);
+          return res.status(429).json({
+            error: resolved.error,
+            code: 'GOOGLE_DRIVE_QUOTA_EXCEEDED',
+          });
+        }
         if (!resolved.playableUrl) {
           res.removeListener('close', onResponseClose);
           return res.status(400).json({
             error: resolved.error || 'Could not resolve Google Drive media stream',
+            code: 'GOOGLE_DRIVE_UNRESOLVED',
           });
         }
         targetUrl = resolved.playableUrl;

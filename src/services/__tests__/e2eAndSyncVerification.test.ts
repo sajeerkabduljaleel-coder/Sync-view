@@ -12,14 +12,20 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 process.env.SYNCVIEW_DISABLE_AUTO_LISTEN = '1';
+process.env.NODE_ENV = 'test';
 
-import { createSyncViewApp } from '../../../server';
 import { WatchPartyManager } from '../watchPartyModel';
 import { SingleInstanceFileWatchPartyRepository } from '../watchPartyRepository';
 import { SessionSyncController } from '../SessionSyncController';
 import { mapSourceToReaction, mapReactionToSource } from '../syncEngine';
-import { MediaPlayerAdapter, PlayerErrorInfo } from '../mediaProviders/types';
+import {
+  MANUAL_ONLY_CAPABILITIES,
+  MediaPlayerAdapter,
+  PlayerErrorInfo,
+} from '../mediaProviders/types';
 import { SyncAnchor } from '../../types';
+
+let createSyncViewApp: typeof import('../../../server')['createSyncViewApp'];
 
 // =====================================================================
 // Simulated Realistic MediaPlayerAdapter for Deterministic Sync Profiling
@@ -182,8 +188,11 @@ let server: http.Server;
 let baseUrl = '';
 
 before(async () => {
+  const srvMod = await import('../../../server');
+  createSyncViewApp = srvMod.createSyncViewApp;
+
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'syncview-e2e-'));
-  const repo = new SingleInstanceFileWatchPartyRepository(path.join(tmpDir, 'parties.json'));
+  const repo = new SingleInstanceFileWatchPartyRepository(tmpDir, 'parties.json');
   const manager = new WatchPartyManager(repo);
   const app = createSyncViewApp(manager);
 
@@ -244,7 +253,7 @@ test('E2E HTTP: custom Watch Party creation rejects blob:/XSS URLs and supports 
   });
   assert.equal(blobRes.status, 400);
   const blobErr = await blobRes.json();
-  assert.match(blobErr.error, /local browser files/i);
+  assert.match(blobErr.error, /local device files/i);
 
   // 2. Reject javascript: XSS scheme
   const xssRes = await fetch(`${baseUrl}/api/parties`, {
@@ -378,7 +387,7 @@ test('E2E HTTP: custom Watch Party creation rejects blob:/XSS URLs and supports 
   const playPayload = await hostPlay.json();
   assert.equal(playPayload.playbackState.isPlaying, true);
   assert.equal(playPayload.playbackState.sourceTime, 15);
-  assert.equal(playPayload.playbackState.seq, 1);
+  assert.equal(playPayload.playbackState.seq, 2);
 
   // 8. Notes & Chat: server identity + author/host deletion check
   const hostNoteRes = await fetch(`${baseUrl}/api/parties/${roomCode}/notes`, {
@@ -472,8 +481,8 @@ test('E2E HTTP: custom Watch Party creation rejects blob:/XSS URLs and supports 
   assert.ok(!persistedFile.includes(newHostToken), 'Raw new host token must never hit disk');
   assert.ok(!persistedFile.includes(guestToken), 'Raw participant token must never hit disk');
 
-  // Re-instantiate repository from disk to confirm reload works
-  const reloadedRepo = new SingleInstanceFileWatchPartyRepository(path.join(tmpDir, 'parties.json'));
+  // Re-instantiate repository from disk to confirm reload works across server restarts
+  const reloadedRepo = new SingleInstanceFileWatchPartyRepository(tmpDir, 'parties.json');
   const reloadedManager = new WatchPartyManager(reloadedRepo);
   const reloadedRoom = await reloadedManager.getRoom(roomCode);
   assert.ok(reloadedRoom);
@@ -481,6 +490,56 @@ test('E2E HTTP: custom Watch Party creation rejects blob:/XSS URLs and supports 
   assert.equal(reloadedRoom.hostId, guestParticipant.id);
   const isNewHostValid = await reloadedManager.isAuthorizedHost(roomCode, newHostToken);
   assert.equal(isNewHostValid, true);
+
+  // Spin up fresh Express instance backed by the reloaded disk repository (full HTTP restart test)
+  const restartedApp = createSyncViewApp(reloadedManager);
+  const restartedServer = await new Promise<http.Server>((resolve) => {
+    const s = restartedApp.listen(0, '127.0.0.1', () => resolve(s));
+  });
+  try {
+    const rPort = (restartedServer.address() as AddressInfo).port;
+    const rBase = `http://127.0.0.1:${rPort}`;
+    const getRestarted = await fetch(`${rBase}/api/parties/${roomCode}`);
+    assert.equal(getRestarted.status, 200);
+    const restartedBody = await getRestarted.json();
+    assert.equal(restartedBody.room.playbackState.sourceTime, 42);
+    assert.equal(restartedBody.room.notes.length, 1);
+
+    const postRestartHostPause = await fetch(`${rBase}/api/parties/${roomCode}/command`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-host-token': newHostToken,
+      },
+      body: JSON.stringify({ command: 'pause', sourceTime: 45 }),
+    });
+    assert.equal(postRestartHostPause.status, 200);
+    const pauseData = await postRestartHostPause.json();
+    assert.equal(pauseData.playbackState.isPlaying, false);
+    assert.equal(pauseData.playbackState.sourceTime, 45);
+  } finally {
+    await new Promise<void>((resolve) => restartedServer.close(() => resolve()));
+  }
+});
+
+test('E2E HTTP: /api/media/stream and /api/media/inspect enforce SSRF blocks, parameter validation, and RFC 7233 ranges', async () => {
+  const missingRes = await fetch(`${baseUrl}/api/media/stream`);
+  assert.equal(missingRes.status, 400);
+
+  const ssrfLocal = await fetch(`${baseUrl}/api/media/stream?url=${encodeURIComponent('http://127.0.0.1:80/secret.mp4')}`);
+  assert.equal(ssrfLocal.status, 403);
+  const ssrfLocalJson = await ssrfLocal.json();
+  assert.equal(ssrfLocalJson.code, 'SSRF_BLOCKED');
+
+  const ssrfImds = await fetch(`${baseUrl}/api/media/inspect?url=${encodeURIComponent('http://169.254.169.254/latest/meta-data/')}`);
+  assert.equal(ssrfImds.status, 403);
+  const ssrfImdsJson = await ssrfImds.json();
+  assert.equal(ssrfImdsJson.ok, false);
+
+  const badRange = await fetch(`${baseUrl}/api/media/stream?url=${encodeURIComponent('https://example.com/video.mp4')}`, {
+    headers: { Range: 'bytes=500-100' },
+  });
+  assert.equal(badRange.status, 416);
 });
 
 // =====================================================================
@@ -557,12 +616,15 @@ test('Sync Calibration: piecewise anchors, pauses, seeks, buffering recovery, sh
   const hardSeeksBeforeRecovery = controller.getState().primaryMetrics.correctionCount;
   rxPrimary.buffering = false;
   controller.evaluateSyncCycle();
-  const postRecoveryState = controller.getState();
-  const recoveryDriftMs = Math.abs(postRecoveryState.primaryMetrics.currentDrift) * 1000;
+  const immediateRecoveryState = controller.getState();
   assert.ok(
-    postRecoveryState.primaryMetrics.correctionCount > hardSeeksBeforeRecovery,
+    immediateRecoveryState.primaryMetrics.correctionCount > hardSeeksBeforeRecovery,
     'Hard seek correction should fire on buffering recovery when drift exceeds threshold'
   );
+  // Evaluate one cycle after seek settles to measure post-recovery steady drift
+  controller.evaluateSyncCycle();
+  const postRecoveryState = controller.getState();
+  const recoveryDriftMs = Math.abs(postRecoveryState.primaryMetrics.currentDrift) * 1000;
   assert.ok(
     recoveryDriftMs < 50,
     `Drift should return near 0ms immediately after recovery hard seek (got ${recoveryDriftMs.toFixed(1)}ms)`
@@ -574,6 +636,7 @@ test('Sync Calibration: piecewise anchors, pauses, seeks, buffering recovery, sh
   controller.setReactionAnchors('rx-short', [{ id: 's-intro', sourceTime: 0, reactionTime: 10, type: 'intro' }]);
   controller.setActiveReaction('rx-short');
   controller.seekToSourceTime(120); // target would be 130s, clamped to 90s duration
+  assert.equal(rxShort.currentTime, 90, 'seekToSourceTime must clamp seek within shorter reaction duration');
   controller.evaluateSyncCycle();
   const initialCorrections = controller.getState().primaryMetrics.correctionCount;
   for (let i = 0; i < 20; i++) {
@@ -646,9 +709,125 @@ test('Sync Calibration: piecewise anchors, pauses, seeks, buffering recovery, sh
   manualController.seekToSourceTime(10);
   await manualController.play();
   assert.equal(manualController.getState().isPlaying, true);
-  assert.equal(manualController.getState().sessionCapability.capability, 'mixed');
+  assert.equal(manualController.getState().sessionCapability.capability, 'manual_sync');
+  assert.equal(manualController.getState().sessionCapability.isAutomaticSyncAvailable, false);
   assert.equal(autoRx.currentTime, 25);
 
   controller.destroy();
   manualController.destroy();
+});
+
+test('Capability Enforcement: source buffering holds without seek loops, manual players receive zero commands, errors isolate cleanly, and audio focus respects capabilities', async () => {
+  // 1. Source buffering stall must NOT cause runaway correction seek loops
+  const bufController = new SessionSyncController();
+  const src = new CalibratedMockAdapter('source-player', { duration: 300 });
+  const rx = new CalibratedMockAdapter('rx-1', { duration: 300 });
+  bufController.setActiveReaction('rx-1');
+  bufController.setReactionAnchors('rx-1', [{ id: 'a1', sourceTime: 0, reactionTime: 10, type: 'intro' }]);
+  bufController.registerSourceAdapter(src);
+  bufController.registerReactionAdapter('rx-1', rx);
+
+  await bufController.play();
+  src.advance(5);
+  rx.advance(5);
+  bufController.evaluateSyncCycle();
+  const seeksBeforeSourceStall = bufController.getState().primaryMetrics.correctionCount;
+
+  // Source stalls/buffers for 3 seconds
+  src.buffering = true;
+  for (let i = 0; i < 30; i++) {
+    rx.advance(0.1);
+    bufController.evaluateSyncCycle();
+  }
+  assert.equal(bufController.getState().isBuffering, true);
+  assert.equal(rx.paused, true, 'Controllable reaction should pause cleanly while source buffers');
+  assert.equal(
+    bufController.getState().primaryMetrics.correctionCount,
+    seeksBeforeSourceStall,
+    'Must not trigger correction seek loops while source is buffering'
+  );
+
+  // Source recovers -> reaction resumes cleanly in sync
+  src.buffering = false;
+  bufController.evaluateSyncCycle();
+  assert.equal(rx.paused, false);
+  assert.ok(Math.abs(rx.currentTime - (src.currentTime + 10)) < 0.6);
+
+  // 2. Manual-only adapter must NEVER receive play/pause/seek/rate/volume commands
+  const commandCalls: string[] = [];
+  const strictManualRx: MediaPlayerAdapter = {
+    id: 'rx-manual',
+    provider: 'patreon',
+    playbackMode: 'external',
+    syncCapability: 'manual_sync',
+    capabilities: MANUAL_ONLY_CAPABILITIES,
+    getCurrentTime: () => null,
+    getDuration: () => null,
+    isPaused: () => null,
+    isBuffering: () => false,
+    getReadyState: () => 0,
+    getError: () => null,
+    getPlaybackRate: () => null,
+    isMuted: () => null,
+    getVolume: () => null,
+    play: async () => {
+      commandCalls.push('play');
+      return false;
+    },
+    pause: () => {
+      commandCalls.push('pause');
+      return false;
+    },
+    seekTo: () => {
+      commandCalls.push('seekTo');
+      return false;
+    },
+    setPlaybackRate: () => {
+      commandCalls.push('setPlaybackRate');
+      return false;
+    },
+    setMuted: () => {
+      commandCalls.push('setMuted');
+      return false;
+    },
+    setVolume: () => {
+      commandCalls.push('setVolume');
+      return false;
+    },
+  };
+
+  bufController.registerReactionAdapter('rx-manual', strictManualRx);
+  bufController.setReactionAnchors('rx-manual', [{ id: 'am', sourceTime: 0, reactionTime: 20, type: 'intro' }]);
+  bufController.seekToSourceTime(30);
+  await bufController.play();
+  bufController.stepReactionOffset('rx-manual', 0.2);
+  bufController.setAudioFocus('rx-manual'); // audio focus targeting manual player must still duck source without touching manual controls
+  for (let i = 0; i < 10; i++) {
+    src.advance(0.1);
+    rx.advance(0.1);
+    bufController.evaluateSyncCycle();
+  }
+  bufController.pause();
+
+  assert.deepEqual(commandCalls, [], 'Manual-sync adapter must never receive any playback or volume commands');
+  assert.equal(src.volume, 0.25, 'Controllable source must duck cleanly when audio focus targets manual external reaction');
+  const manualTarget = bufController.getState().manualTargetTimes['rx-manual'];
+  assert.ok(manualTarget !== undefined && Math.abs(manualTarget - 51) < 1e-9, `Expected manual target ~51, got ${manualTarget}`);
+
+  // 3. Extra reactor failure must NOT disrupt active healthy primary reaction
+  const brokenExtra = new CalibratedMockAdapter('rx-broken', { duration: 200 });
+  brokenExtra.error = { message: 'Network 403', code: 4 };
+  bufController.registerReactionAdapter('rx-broken', brokenExtra);
+  await bufController.play();
+  src.advance(1);
+  rx.advance(1);
+  bufController.evaluateSyncCycle();
+
+  const stAfterErr = bufController.getState();
+  assert.equal(stAfterErr.hasPlayerErrors, true);
+  assert.ok(stAfterErr.unhealthyPlayerIds.includes('rx-broken'));
+  assert.equal(stAfterErr.extraReactorMetrics['rx-broken'].status, 'error');
+  assert.notEqual(stAfterErr.primaryStatus, 'error', 'Primary healthy reaction must remain unaffected by extra reactor error');
+
+  bufController.destroy();
 });

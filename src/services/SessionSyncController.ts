@@ -71,6 +71,7 @@ export class SessionSyncController {
   private syncIntervalId: ReturnType<typeof setInterval> | null = null;
   private lastClockTickMs: number | null = null;
   private autoStartedAdapterIds: Set<string> = new Set();
+  private pausedForSourceBufferIds: Set<string> = new Set();
 
   private state: SessionSyncState = {
     isPlaying: false,
@@ -132,11 +133,13 @@ export class SessionSyncController {
       this.reactionAdapters.set(reactionId, adapter);
       if (prev !== adapter) {
         this.autoStartedAdapterIds.delete(reactionId);
+        this.pausedForSourceBufferIds.delete(reactionId);
       }
     } else {
       this.reactionAdapters.delete(reactionId);
       this.correctionCounts.delete(reactionId);
       this.autoStartedAdapterIds.delete(reactionId);
+      this.pausedForSourceBufferIds.delete(reactionId);
     }
     this.refreshSessionHealthAndCapabilities();
     this.applyAudioMix();
@@ -272,6 +275,7 @@ export class SessionSyncController {
     this.state.isPlaying = false;
     this.lastClockTickMs = null;
     this.autoStartedAdapterIds.clear();
+    this.pausedForSourceBufferIds.clear();
 
     if (this.sourceAdapter && this.sourceAdapter.capabilities.canPause) {
       if (this.sourceAdapter.isPaused() === false) {
@@ -329,7 +333,12 @@ export class SessionSyncController {
         !adapter.getError() &&
         adapter.getReadyState() >= 1
       ) {
-        adapter.seekTo(targetReactionTime);
+        const rxDuration = adapter.capabilities.canReadDuration ? adapter.getDuration() : null;
+        const seekTarget =
+          rxDuration !== null && Number.isFinite(rxDuration) && rxDuration > 0
+            ? Math.min(targetReactionTime, rxDuration)
+            : targetReactionTime;
+        adapter.seekTo(seekTarget);
       }
     }
 
@@ -487,6 +496,8 @@ export class SessionSyncController {
     let anyControllablePlaying = false;
     let anyBuffering = false;
 
+    let sourceIsBuffering = false;
+
     // 1. Update authoritative source timeline & duration if readable
     if (
       this.sourceAdapter &&
@@ -506,7 +517,10 @@ export class SessionSyncController {
         this.state.isPlaying = !sourcePaused;
         if (!sourcePaused) anyControllablePlaying = true;
       }
-      if (this.sourceAdapter.isBuffering()) {
+      sourceIsBuffering =
+        this.sourceAdapter.isBuffering() ||
+        (this.state.isPlaying && this.sourceAdapter.getReadyState() < 3);
+      if (sourceIsBuffering) {
         anyBuffering = true;
       }
       this.lastClockTickMs = this.state.isPlaying ? now : null;
@@ -604,8 +618,9 @@ export class SessionSyncController {
         anyControllablePlaying = true;
       }
 
-      const isBuffering = adapter.isBuffering() || adapter.getReadyState() < 3;
-      if (isBuffering) {
+      const isReactionBuffering = adapter.isBuffering() || adapter.getReadyState() < 3;
+      const effectiveBuffering = isReactionBuffering || sourceIsBuffering;
+      if (effectiveBuffering) {
         anyBuffering = true;
         if (adapter.capabilities.canControlRate && (adapter.getPlaybackRate() ?? 1.0) !== 1.0) {
           adapter.setPlaybackRate(1.0);
@@ -622,10 +637,36 @@ export class SessionSyncController {
       const effectiveTargetTime =
         reachedReactionEnd && reactionDuration !== null ? reactionDuration : targetTime;
 
+      // Hold controllable reaction while source buffers so it doesn't run ahead or trigger seek loops
+      if (
+        sourceIsBuffering &&
+        this.state.isPlaying &&
+        !reachedReactionEnd &&
+        adapter.capabilities.canPause &&
+        adapter.isPaused() === false
+      ) {
+        if (adapter.pause()) {
+          this.pausedForSourceBufferIds.add(id);
+        }
+      } else if (
+        !effectiveBuffering &&
+        this.state.isPlaying &&
+        !reachedReactionEnd &&
+        this.pausedForSourceBufferIds.has(id)
+      ) {
+        this.pausedForSourceBufferIds.delete(id);
+        if (adapter.capabilities.canSeek && Math.abs(actualTime - effectiveTargetTime) > 0.5) {
+          adapter.seekTo(effectiveTargetTime);
+        }
+        if (adapter.capabilities.canPlay && adapter.isPaused() === true) {
+          void adapter.play().catch(() => false);
+        }
+      }
+
       // If session is playing and a newly-mounted/recovered controllable reaction is still paused before end, align and start it
       if (
         this.state.isPlaying &&
-        !isBuffering &&
+        !effectiveBuffering &&
         !reachedReactionEnd &&
         adapter.capabilities.canPlay &&
         adapter.getReadyState() >= 3 &&
@@ -669,13 +710,13 @@ export class SessionSyncController {
       const correction = computeDriftCorrection(
         actualTime,
         effectiveTargetTime,
-        isBuffering,
+        effectiveBuffering,
         !this.state.isPlaying,
         this.config
       );
 
       let didHardSeek = false;
-      if (this.state.isPlaying && !isBuffering && adapter.getReadyState() >= 2) {
+      if (this.state.isPlaying && !effectiveBuffering && adapter.getReadyState() >= 2) {
         if (
           correction.shouldHardSeek &&
           correction.seekTarget !== null &&
@@ -762,6 +803,8 @@ export class SessionSyncController {
     this.reactionAdapters.clear();
     this.reactionAnchors.clear();
     this.correctionCounts.clear();
+    this.autoStartedAdapterIds.clear();
+    this.pausedForSourceBufferIds.clear();
     this.listeners.clear();
   }
 }

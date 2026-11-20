@@ -107,6 +107,17 @@ export function Navigation({
                 <span>Viewing Canvas</span>
               </button>
               <button
+                onClick={() => onSelectViewerTab('explore')}
+                className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${
+                  viewerTab === 'explore'
+                    ? 'text-white bg-slate-900 border border-slate-800 font-semibold'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Compass className="w-3.5 h-3.5 text-sky-400" />
+                <span>Explore</span>
+              </button>
+              <button
                 onClick={() => onSelectViewerTab('library')}
                 className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${
                   viewerTab === 'library'
@@ -233,6 +244,17 @@ export function Navigation({
             >
               <Tv className="w-3.5 h-3.5 text-indigo-400" />
               <span>Viewing Canvas</span>
+            </button>
+            <button
+              onClick={() => onSelectViewerTab('explore')}
+              className={`px-2.5 py-1.5 rounded-lg whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
+                viewerTab === 'explore'
+                  ? 'text-white bg-slate-900 border border-slate-800 font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Compass className="w-3.5 h-3.5 text-sky-400" />
+              <span>Explore</span>
             </button>
             <button
               onClick={() => onSelectViewerTab('library')}
