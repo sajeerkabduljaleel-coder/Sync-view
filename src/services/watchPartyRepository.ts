@@ -16,6 +16,8 @@ export interface ParticipantSession {
   isHost: boolean;
   roomId: string;
   joinedAt: number;
+  lastSeenAt?: number;
+  explicitlyLeft?: boolean;
   lastMessageTime: number;
   messageWindowCount: number;
 }
@@ -181,6 +183,8 @@ export class SingleInstanceFileWatchPartyRepository implements IWatchPartyReposi
               isHost: Boolean(session.isHost),
               roomId: session.roomId,
               joinedAt: session.joinedAt || Date.now(),
+              lastSeenAt: typeof session.lastSeenAt === 'number' ? session.lastSeenAt : (session.joinedAt || Date.now()),
+              explicitlyLeft: Boolean(session.explicitlyLeft),
               lastMessageTime: session.lastMessageTime || 0,
               messageWindowCount: session.messageWindowCount || 0,
             };

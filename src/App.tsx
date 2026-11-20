@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { VideoSource, ReactionVideo, UserAccount } from './types';
 import { catalogueService } from './services/catalogueService';
 import { authService } from './services/authService';
@@ -19,6 +19,8 @@ import { Theatre } from './components/theatre/Theatre';
 import { AuthModal } from './components/auth/AuthModal';
 import { AlertCircle, RefreshCw, Play, X } from 'lucide-react';
 
+const ACTIVE_PARTY_CODE_KEY = 'syncview_active_party_code';
+
 export default function App() {
   // Mode persistence (Viewer vs Reactor)
   const [mode, setMode] = useState<'viewer' | 'reactor'>(() => {
@@ -33,9 +35,11 @@ export default function App() {
   const [viewerTab, setViewerTab] = useState<'home' | 'explore' | 'parties' | 'library'>('home');
   const [reactorTab, setReactorTab] = useState<'home' | 'my-reactions' | 'create' | 'studio'>('home');
 
-  // App Content state loaded from CatalogueService
+  // App Content state loaded from CatalogueService + server catalogue API
   const [sources, setSources] = useState<VideoSource[]>([]);
   const [reactions, setReactions] = useState<ReactionVideo[]>([]);
+  const [catalogueLoading, setCatalogueLoading] = useState(true);
+  const [catalogueError, setCatalogueError] = useState<string | null>(null);
 
   // Theatre modal/screen state
   const [theatreState, setTheatreState] = useState<{
@@ -47,6 +51,7 @@ export default function App() {
     roomCode?: string;
     hostToken?: string;
     participantToken?: string;
+    participantId?: string;
   } | null>(null);
 
   // Watch party creation & join error states
@@ -69,7 +74,7 @@ export default function App() {
 
   const readPartyCreds = (
     code: string
-  ): { hostToken?: string; participantToken?: string } => {
+  ): { hostToken?: string; participantToken?: string; participantId?: string } => {
     try {
       const raw = sessionStorage.getItem(`syncview_party_creds_${code.toUpperCase()}`);
       if (!raw) return {};
@@ -78,6 +83,8 @@ export default function App() {
         hostToken: typeof parsed.hostToken === 'string' ? parsed.hostToken : undefined,
         participantToken:
           typeof parsed.participantToken === 'string' ? parsed.participantToken : undefined,
+        participantId:
+          typeof parsed.participantId === 'string' ? parsed.participantId : undefined,
       };
     } catch {
       return {};
@@ -86,13 +93,23 @@ export default function App() {
 
   const writePartyCreds = (
     code: string,
-    creds: { hostToken?: string; participantToken?: string }
+    creds: { hostToken?: string; participantToken?: string; participantId?: string }
   ) => {
     try {
       sessionStorage.setItem(
         `syncview_party_creds_${code.toUpperCase()}`,
         JSON.stringify(creds)
       );
+    } catch {}
+  };
+
+  const setActivePartyCode = (code: string | null) => {
+    try {
+      if (code) {
+        sessionStorage.setItem(ACTIVE_PARTY_CODE_KEY, code.toUpperCase());
+      } else {
+        sessionStorage.removeItem(ACTIVE_PARTY_CODE_KEY);
+      }
     } catch {}
   };
 
@@ -111,9 +128,137 @@ export default function App() {
     };
   };
 
-  // Initialize Auth & Catalogue
+  const loadCatalogue = useCallback(async () => {
+    setCatalogueLoading(true);
+    setCatalogueError(null);
+
+    const [localSrcs, localRxs] = await Promise.all([
+      catalogueService.getSources(),
+      catalogueService.getReactions(),
+    ]);
+
+    let serverSrcs: VideoSource[] = [];
+    let serverRxs: ReactionVideo[] = [];
+    let fetchError: string | null = null;
+
+    try {
+      const [srcRes, rxRes] = await Promise.all([
+        fetch('/api/catalogue/sources'),
+        fetch('/api/catalogue/reactions'),
+      ]);
+      if (!srcRes.ok || !rxRes.ok) {
+        fetchError = `Unable to load catalogue from server (HTTP ${!srcRes.ok ? srcRes.status : rxRes.status}).`;
+      } else {
+        const [srcJson, rxJson] = await Promise.all([srcRes.json(), rxRes.json()]);
+        if (Array.isArray(srcJson)) serverSrcs = srcJson;
+        if (Array.isArray(rxJson)) serverRxs = rxJson;
+      }
+    } catch {
+      fetchError = 'Network error while loading catalogue from server.';
+    }
+
+    // Merge server + local items (local items win by ID so Studio edits persist)
+    const mergedSourceMap = new Map<string, VideoSource>();
+    serverSrcs.forEach((s) => mergedSourceMap.set(s.id, s));
+    localSrcs.forEach((s) => mergedSourceMap.set(s.id, s));
+    const mergedSources = Array.from(mergedSourceMap.values());
+
+    const mergedReactionMap = new Map<string, ReactionVideo>();
+    serverRxs.forEach((r) => mergedReactionMap.set(r.id, r));
+    localRxs.forEach((r) => mergedReactionMap.set(r.id, r));
+    const mergedReactions = Array.from(mergedReactionMap.values());
+
+    setSources(mergedSources);
+    setReactions(mergedReactions);
+    setActiveStudioReaction((prev) => {
+      if (prev) {
+        return mergedReactions.find((r) => r.id === prev.id) || prev;
+      }
+      return mergedReactions[0] || null;
+    });
+    setCatalogueError(fetchError);
+    setCatalogueLoading(false);
+  }, []);
+
+  const handleJoinParty = useCallback(
+    async (rawCode: string, options?: { isAutoReconnect?: boolean }) => {
+      const roomCode = rawCode.trim().toUpperCase();
+      if (!roomCode) {
+        if (!options?.isAutoReconnect) {
+          setJoinPartyError('Please enter a valid Watch Party room code.');
+        }
+        return;
+      }
+
+      setJoinPartyError(null);
+      const user = authService.getUser();
+      const participantName = user ? user.name : 'Guest Viewer';
+      const existingCreds = readPartyCreds(roomCode);
+
+      try {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+        if (existingCreds.participantToken) {
+          headers['x-participant-token'] = existingCreds.participantToken;
+        }
+
+        const joinRes = await fetch(`/api/parties/${roomCode}/join`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ participantName }),
+        });
+
+        const data = await joinRes.json().catch(() => ({}));
+        if (joinRes.ok && data.room) {
+          const party = data.room;
+          const participantToken = data.participantToken || existingCreds.participantToken;
+          const participantId = data.participantId || existingCreds.participantId;
+          const serverSaysHost = Boolean(
+            data.isHost || (participantId && party.hostId === participantId)
+          );
+          const hostToken = serverSaysHost ? existingCreds.hostToken : undefined;
+
+          writePartyCreds(party.roomCode, { hostToken, participantToken, participantId });
+          setActivePartyCode(party.roomCode);
+
+          setTheatreState({
+            active: true,
+            source: party.sourceVideo,
+            primaryReaction: party.primaryReaction,
+            extraReactions: party.additionalReactions || [],
+            isHost: serverSaysHost && Boolean(hostToken),
+            roomCode: party.roomCode,
+            hostToken,
+            participantToken,
+            participantId,
+          });
+          setMode('viewer');
+          setViewerTab('home');
+          return;
+        }
+
+        if (joinRes.status === 404) {
+          setActivePartyCode(null);
+        }
+        if (!options?.isAutoReconnect) {
+          setJoinPartyError(
+            data.error || `Watch party room "${roomCode}" was not found or has expired.`
+          );
+        }
+      } catch {
+        if (!options?.isAutoReconnect) {
+          setJoinPartyError(
+            `Network error while attempting to join Watch Party "${roomCode}".`
+          );
+        }
+      }
+    },
+    []
+  );
+
+  // Initialize Auth, Catalogue & Auto-Reconnect to Active Watch Party
   useEffect(() => {
-    // Session restoration
     authService.init().then((user) => {
       setCurrentUser(user);
     });
@@ -122,22 +267,17 @@ export default function App() {
       setCurrentUser(user);
     });
 
-    // Catalogue loading
-    const loadCatalogue = async () => {
-      const [srcs, rxs] = await Promise.all([
-        catalogueService.getSources(),
-        catalogueService.getReactions(),
-      ]);
-      setSources(srcs);
-      setReactions(rxs);
-      if (rxs.length > 0) {
-        setActiveStudioReaction(rxs[0]);
-      }
-    };
     loadCatalogue();
 
+    try {
+      const savedActivePartyCode = sessionStorage.getItem(ACTIVE_PARTY_CODE_KEY);
+      if (savedActivePartyCode) {
+        void handleJoinParty(savedActivePartyCode, { isAutoReconnect: true });
+      }
+    } catch {}
+
     return unsub;
-  }, []);
+  }, [loadCatalogue, handleJoinParty]);
 
   // Persist Mode Changes
   const handleSwitchMode = (newMode: 'viewer' | 'reactor') => {
@@ -161,6 +301,7 @@ export default function App() {
         ? extraReactions
         : reactions.filter((r) => r.sourceId === source.id && r.id !== reaction.id).slice(0, 3);
 
+    setActivePartyCode(null);
     setJoinPartyError(null);
     setTheatreState({
       active: true,
@@ -173,61 +314,41 @@ export default function App() {
     setViewerTab('home');
   };
 
-  const handleJoinParty = async (rawCode: string) => {
-    const roomCode = rawCode.trim().toUpperCase();
-    if (!roomCode) {
-      setJoinPartyError('Please enter a valid Watch Party room code.');
-      return;
-    }
-
-    setJoinPartyError(null);
-    const participantName = currentUser ? currentUser.name : 'Guest Viewer';
-    const existingCreds = readPartyCreds(roomCode);
-
-    try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (existingCreds.participantToken) {
-        headers['x-participant-token'] = existingCreds.participantToken;
-      }
-
-      const joinRes = await fetch(`/api/parties/${roomCode}/join`, {
+  const handleExitTheatre = () => {
+    if (theatreState?.roomCode && theatreState.participantToken) {
+      fetch(`/api/parties/${theatreState.roomCode}/leave`, {
         method: 'POST',
-        headers,
-        body: JSON.stringify({ participantName }),
-      });
-
-      const data = await joinRes.json().catch(() => ({}));
-      if (joinRes.ok && data.room) {
-        const party = data.room;
-        const participantToken = data.participantToken || existingCreds.participantToken;
-        const hostToken = existingCreds.hostToken;
-        writePartyCreds(party.roomCode, { hostToken, participantToken });
-
-        setTheatreState({
-          active: true,
-          source: party.sourceVideo,
-          primaryReaction: party.primaryReaction,
-          extraReactions: party.additionalReactions || [],
-          isHost: Boolean(hostToken),
-          roomCode: party.roomCode,
-          hostToken,
-          participantToken,
-        });
-        setMode('viewer');
-        setViewerTab('home');
-        return;
-      }
-
-      setJoinPartyError(
-        data.error || `Watch party room "${roomCode}" was not found or has expired.`
-      );
-    } catch {
-      setJoinPartyError(
-        `Network error while attempting to join Watch Party "${roomCode}".`
-      );
+        headers: {
+          'x-participant-token': theatreState.participantToken,
+        },
+      }).catch(() => {});
     }
+    setActivePartyCode(null);
+    setTheatreState(null);
+  };
+
+  const handleLeavePartyToPrivate = () => {
+    if (theatreState?.roomCode && theatreState.participantToken) {
+      fetch(`/api/parties/${theatreState.roomCode}/leave`, {
+        method: 'POST',
+        headers: {
+          'x-participant-token': theatreState.participantToken,
+        },
+      }).catch(() => {});
+    }
+    setActivePartyCode(null);
+    setTheatreState((prev) =>
+      prev
+        ? {
+            ...prev,
+            roomCode: undefined,
+            hostToken: undefined,
+            participantToken: undefined,
+            participantId: undefined,
+            isHost: true,
+          }
+        : null
+    );
   };
 
   const handleCreateParty = async (
@@ -258,11 +379,14 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         const createdRoomCode = data.room?.roomCode;
+        const hostParticipantId = data.room?.hostId;
         if (createdRoomCode) {
           writePartyCreds(createdRoomCode, {
             hostToken: data.hostToken,
             participantToken: data.participantToken,
+            participantId: hostParticipantId,
           });
+          setActivePartyCode(createdRoomCode);
         }
         setTheatreState({
           active: true,
@@ -273,6 +397,7 @@ export default function App() {
           roomCode: createdRoomCode,
           hostToken: data.hostToken,
           participantToken: data.participantToken,
+          participantId: hostParticipantId,
         });
         setMode('viewer');
         setViewerTab('home');
@@ -363,14 +488,17 @@ export default function App() {
                 roomCode={theatreState?.roomCode}
                 hostToken={theatreState?.hostToken}
                 participantToken={theatreState?.participantToken}
-                onExit={() => setTheatreState(null)}
+                participantId={theatreState?.participantId}
+                onExit={handleExitTheatre}
+                onLeavePartyToPrivate={handleLeavePartyToPrivate}
                 onOpenCreatorStudio={(rx) => {
                   setActiveStudioReaction(rx);
-                  setTheatreState(null);
+                  handleExitTheatre();
                   setMode('reactor');
                   setReactorTab('studio');
                 }}
                 onStreamsChanged={(config) => {
+                  setActivePartyCode(null);
                   setTheatreState({
                     active: true,
                     source: config.source,
@@ -378,6 +506,7 @@ export default function App() {
                     extraReactions: config.extraReactions,
                     isHost: true,
                   });
+                  void loadCatalogue();
                 }}
                 onJoinPartyByCode={handleJoinParty}
                 onCreateParty={handleCreateParty}
@@ -389,6 +518,9 @@ export default function App() {
               <ExploreView
                 sources={sources}
                 reactions={reactions}
+                isLoading={catalogueLoading}
+                error={catalogueError}
+                onRetry={loadCatalogue}
                 onWatch={handleWatchInTheatre}
               />
             )}

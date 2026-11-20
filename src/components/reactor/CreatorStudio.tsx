@@ -36,8 +36,27 @@ import {
   ArrowLeft,
   Save,
   HelpCircle,
+  RefreshCw,
 } from 'lucide-react';
 import { ContextualHelp } from '../common/ContextualHelp';
+
+const getDraftStorageKey = (reactionId: string) => `syncview_studio_draft_${reactionId}`;
+
+function describeVideoMediaError(videoEl: HTMLVideoElement | null, label: string): string {
+  const code = videoEl?.error?.code;
+  switch (code) {
+    case 1:
+      return `${label} preview loading was aborted.`;
+    case 2:
+      return `Network error while loading ${label} preview stream.`;
+    case 3:
+      return `${label} stream could not be decoded by this browser.`;
+    case 4:
+      return `${label} URL is unreachable, blocked by CORS, or uses an unsupported media format.`;
+    default:
+      return `Unable to load ${label} preview media.`;
+  }
+}
 
 interface CreatorStudioProps {
   sourceVideo: VideoSource;
@@ -54,22 +73,125 @@ export function CreatorStudio({
   onBack,
   onOpenInTheatre,
 }: CreatorStudioProps) {
+  const draftKey = getDraftStorageKey(initialReaction.id);
+
+  // Restore unsaved working draft from sessionStorage if present
+  const initialDraft = React.useMemo(() => {
+    try {
+      const raw = sessionStorage.getItem(draftKey);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.anchors)) {
+        return parsed as {
+          anchors: SyncAnchor[];
+          chapters: ReactionChapter[];
+          highlights: ReactionHighlight[];
+        };
+      }
+    } catch {}
+    return null;
+  }, [draftKey]);
+
   const [reaction, setReaction] = useState<ReactionVideo>(initialReaction);
-  const [anchors, setAnchors] = useState<SyncAnchor[]>(initialReaction.anchors || []);
-  const [chapters, setChapters] = useState<ReactionChapter[]>(initialReaction.chapters || []);
-  const [highlights, setHighlights] = useState<ReactionHighlight[]>(initialReaction.highlights || []);
+  const [anchors, setAnchors] = useState<SyncAnchor[]>(
+    initialDraft?.anchors || initialReaction.anchors || []
+  );
+  const [chapters, setChapters] = useState<ReactionChapter[]>(
+    initialDraft?.chapters || initialReaction.chapters || []
+  );
+  const [highlights, setHighlights] = useState<ReactionHighlight[]>(
+    initialDraft?.highlights || initialReaction.highlights || []
+  );
+  const [restoredDraftNotice, setRestoredDraftNotice] = useState<boolean>(Boolean(initialDraft));
+  const [showUnsavedLeavePrompt, setShowUnsavedLeavePrompt] = useState(false);
+
+  // Real or fallback media durations
+  const [sourceDuration, setSourceDuration] = useState<number>(sourceVideo.duration || 300);
+  const [reactionDuration, setReactionDuration] = useState<number>(initialReaction.duration || 320);
+
+  // Preview playback errors & clean reload keys
+  const [sourcePreviewError, setSourcePreviewError] = useState<string | null>(null);
+  const [reactionPreviewError, setReactionPreviewError] = useState<string | null>(null);
+  const [sourceReloadKey, setSourceReloadKey] = useState(0);
+  const [reactionReloadKey, setReactionReloadKey] = useState(0);
 
   // Scrubber times & live preview refs
+  const initialIntroAnchor =
+    (initialDraft?.anchors || initialReaction.anchors || []).find((a) => a.type === 'intro') ||
+    (initialDraft?.anchors || initialReaction.anchors || [])[0];
   const [sourceTime, setSourceTime] = useState(0);
-  const [reactionTime, setReactionTime] = useState(anchors[0]?.reactionTime || 15);
+  const [reactionTime, setReactionTime] = useState(
+    initialIntroAnchor?.reactionTime ?? initialReaction.introDuration ?? 0
+  );
   const [isPlayingTest, setIsPlayingTest] = useState(false);
   const sourcePreviewRef = useRef<HTMLVideoElement | null>(null);
   const reactionPreviewRef = useRef<HTMLVideoElement | null>(null);
 
+  // Always-fresh refs for playback interval (prevents stale closures)
+  const anchorsRef = useRef<SyncAnchor[]>(anchors);
+  const sourceTimeRef = useRef<number>(sourceTime);
+  const reactionTimeRef = useRef<number>(reactionTime);
+  const sourceDurationRef = useRef<number>(sourceDuration);
+  const reactionDurationRef = useRef<number>(reactionDuration);
+
+  anchorsRef.current = anchors;
+  sourceTimeRef.current = sourceTime;
+  reactionTimeRef.current = reactionTime;
+  sourceDurationRef.current = sourceDuration;
+  reactionDurationRef.current = reactionDuration;
+
   const sourceProvider = detectMediaProvider(sourceVideo.url || '', sourceVideo.isLocalFile);
   const reactionProvider = detectMediaProvider(reaction.url || '', reaction.isLocalFile);
-  const canPlayNativeSourcePreview = Boolean(sourceVideo.url) && sourceProvider.playbackMode === 'native';
-  const canPlayNativeReactionPreview = Boolean(reaction.url) && reactionProvider.playbackMode === 'native';
+  const resolvedSourceUrl = sourceVideo.url ? resolvePlayableMediaUrl(sourceVideo.url) : '';
+  const resolvedReactionUrl = reaction.url ? resolvePlayableMediaUrl(reaction.url) : '';
+  const canPlayNativeSourcePreview = Boolean(resolvedSourceUrl) && sourceProvider.playbackMode === 'native';
+  const canPlayNativeReactionPreview = Boolean(resolvedReactionUrl) && reactionProvider.playbackMode === 'native';
+
+  // Track whether local edits differ from saved reaction state
+  const isDirty = React.useMemo(() => {
+    return (
+      JSON.stringify(anchors) !== JSON.stringify(reaction.anchors || []) ||
+      JSON.stringify(chapters) !== JSON.stringify(reaction.chapters || []) ||
+      JSON.stringify(highlights) !== JSON.stringify(reaction.highlights || [])
+    );
+  }, [anchors, chapters, highlights, reaction]);
+
+  // Auto-save working draft to sessionStorage so accidental navigation doesn't lose edits
+  useEffect(() => {
+    try {
+      if (isDirty) {
+        sessionStorage.setItem(
+          draftKey,
+          JSON.stringify({ anchors, chapters, highlights, updatedAt: Date.now() })
+        );
+      } else {
+        sessionStorage.removeItem(draftKey);
+      }
+    } catch {}
+  }, [draftKey, isDirty, anchors, chapters, highlights]);
+
+  // Reset preview errors & pause cleanly whenever media URLs change
+  useEffect(() => {
+    setIsPlayingTest(false);
+    setSourcePreviewError(null);
+    setSourceDuration(sourceVideo.duration || 300);
+    sourcePreviewRef.current?.pause();
+  }, [resolvedSourceUrl, sourceVideo.duration]);
+
+  useEffect(() => {
+    setIsPlayingTest(false);
+    setReactionPreviewError(null);
+    setReactionDuration(reaction.duration || 320);
+    reactionPreviewRef.current?.pause();
+  }, [resolvedReactionUrl, reaction.duration]);
+
+  // Pause videos on unmount to prevent lingering audio/player instances
+  useEffect(() => {
+    return () => {
+      sourcePreviewRef.current?.pause();
+      reactionPreviewRef.current?.pause();
+    };
+  }, []);
 
   useEffect(() => {
     if (!isPlayingTest) {
@@ -78,36 +200,63 @@ export function CreatorStudio({
       return;
     }
 
-    if (canPlayNativeSourcePreview && sourcePreviewRef.current) {
-      sourcePreviewRef.current.currentTime = sourceTime;
+    if (canPlayNativeSourcePreview && sourcePreviewRef.current && !sourcePreviewError) {
+      try {
+        sourcePreviewRef.current.currentTime = sourceTimeRef.current;
+      } catch {}
       sourcePreviewRef.current.play().catch(() => {});
     }
-    if (canPlayNativeReactionPreview && reactionPreviewRef.current) {
-      reactionPreviewRef.current.currentTime = reactionTime;
+    if (canPlayNativeReactionPreview && reactionPreviewRef.current && !reactionPreviewError) {
+      try {
+        reactionPreviewRef.current.currentTime = reactionTimeRef.current;
+      } catch {}
       reactionPreviewRef.current.play().catch(() => {});
     }
 
     const tickInterval = setInterval(() => {
+      const currentAnchors = anchorsRef.current;
+      const maxSourceDur = sourceDurationRef.current || 300;
+      const maxReactionDur = reactionDurationRef.current || 320;
+
       setSourceTime((prev) => {
-        const next = Math.min(sourceVideo.duration || 300, +(prev + 0.2).toFixed(1));
-        const mapped = mapSourceToReaction(next, anchors);
-        setReactionTime(Math.min(reaction.duration || 320, +mapped.toFixed(1)));
-        if (next >= (sourceVideo.duration || 300)) {
+        const next = Math.min(maxSourceDur, +(prev + 0.2).toFixed(1));
+        const mapped = Math.min(maxReactionDur, +mapSourceToReaction(next, currentAnchors).toFixed(1));
+        setReactionTime(mapped);
+
+        if (
+          reactionPreviewRef.current &&
+          reactionPreviewRef.current.readyState >= 1 &&
+          Math.abs(reactionPreviewRef.current.currentTime - mapped) > 0.5
+        ) {
+          try {
+            reactionPreviewRef.current.currentTime = mapped;
+          } catch {}
+        }
+
+        if (next >= maxSourceDur) {
           setIsPlayingTest(false);
         }
         return next;
       });
     }, 200);
 
-    return () => clearInterval(tickInterval);
-  }, [isPlayingTest]);
+    return () => {
+      clearInterval(tickInterval);
+      sourcePreviewRef.current?.pause();
+      reactionPreviewRef.current?.pause();
+    };
+  }, [isPlayingTest, canPlayNativeSourcePreview, canPlayNativeReactionPreview, sourcePreviewError, reactionPreviewError]);
 
   const syncScrubPreviewVideos = (nextSource: number, nextReaction: number) => {
     if (sourcePreviewRef.current && sourcePreviewRef.current.readyState >= 1) {
-      sourcePreviewRef.current.currentTime = nextSource;
+      try {
+        sourcePreviewRef.current.currentTime = nextSource;
+      } catch {}
     }
     if (reactionPreviewRef.current && reactionPreviewRef.current.readyState >= 1) {
-      reactionPreviewRef.current.currentTime = nextReaction;
+      try {
+        reactionPreviewRef.current.currentTime = nextReaction;
+      } catch {}
     }
   };
 
@@ -206,24 +355,35 @@ export function CreatorStudio({
     setChapters((prev) => prev.filter((c) => c.id !== id));
   };
 
-  const handleSaveAll = (overridePublished?: boolean): boolean => {
+  const handleSaveAll = (overridePublished?: boolean): ReactionVideo | null => {
     setSaveError(null);
     setSaveFeedback(null);
     const currentCheck = validateAnchors(anchors);
     if (!currentCheck.valid) {
       setSaveError(currentCheck.errors[0] || 'Cannot save invalid timeline anchors.');
-      return false;
+      return null;
     }
+    const sortedAnchors = [...anchors].sort((a, b) => a.sourceTime - b.sourceTime);
+    const introAnchor =
+      sortedAnchors.find((a) => a.type === 'intro') || sortedAnchors[0];
+
     const updated: ReactionVideo = {
       ...reaction,
-      anchors,
+      anchors: sortedAnchors,
       chapters,
       highlights,
-      introDuration: anchors[0]?.reactionTime ?? reaction.introDuration,
+      duration: reactionDuration,
+      introDuration: introAnchor?.reactionTime ?? reaction.introDuration,
       isPublished: overridePublished !== undefined ? overridePublished : reaction.isPublished,
     };
+    setAnchors(sortedAnchors);
     setReaction(updated);
     onSave(updated);
+    try {
+      sessionStorage.removeItem(draftKey);
+    } catch {}
+    setRestoredDraftNotice(false);
+    setShowUnsavedLeavePrompt(false);
     setSaveFeedback(
       overridePublished !== undefined
         ? overridePublished
@@ -231,7 +391,26 @@ export function CreatorStudio({
           : 'Reaction moved to Drafts.'
         : 'Calibration anchors and chapters saved.'
     );
-    return true;
+    return updated;
+  };
+
+  const handleDiscardDraft = () => {
+    setAnchors(reaction.anchors || []);
+    setChapters(reaction.chapters || []);
+    setHighlights(reaction.highlights || []);
+    setRestoredDraftNotice(false);
+    setShowUnsavedLeavePrompt(false);
+    try {
+      sessionStorage.removeItem(draftKey);
+    } catch {}
+  };
+
+  const handleBackClick = () => {
+    if (isDirty) {
+      setShowUnsavedLeavePrompt(true);
+      return;
+    }
+    onBack();
   };
 
   const formatTime = (secs: number) => {
@@ -243,17 +422,18 @@ export function CreatorStudio({
   return (
     <div className="min-h-screen bg-[#07090e] text-slate-100 flex flex-col font-sans">
       {/* Top Header */}
-      <header className="border-b border-slate-800 bg-slate-950/80 px-4 py-3 flex items-center justify-between sticky top-0 z-20">
-        <div className="flex items-center gap-3">
+      <header className="border-b border-slate-800 bg-slate-950/80 px-3 sm:px-4 py-3 flex flex-wrap items-center justify-between gap-2.5 relative z-20">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
           <button
-            onClick={onBack}
-            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 transition-colors"
+            type="button"
+            onClick={handleBackClick}
+            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back to Reactions</span>
           </button>
-          <div className="h-4 w-px bg-slate-800" />
-          <h2 className="text-sm font-semibold text-white">
+          <div className="hidden sm:block h-4 w-px bg-slate-800" />
+          <h2 className="text-xs sm:text-sm font-semibold text-white">
             Creator Studio & Calibration
           </h2>
           <span className="text-xs text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-0.5 rounded-full font-medium">
@@ -268,12 +448,18 @@ export function CreatorStudio({
           >
             {reaction.isPublished ? 'Published' : 'Draft'}
           </span>
+          {isDirty && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full border border-sky-500/30 bg-sky-950/50 text-sky-300 font-semibold">
+              Unsaved edits
+            </span>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
+            type="button"
             onClick={() => handleSaveAll(!reaction.isPublished)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
               reaction.isPublished
                 ? 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-amber-300'
                 : 'bg-emerald-600 hover:bg-emerald-500 border-emerald-500 text-white'
@@ -282,19 +468,22 @@ export function CreatorStudio({
             {reaction.isPublished ? 'Unpublish' : 'Publish Reaction'}
           </button>
           <button
+            type="button"
             onClick={() => handleSaveAll()}
-            className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium flex items-center gap-1.5 shadow-md shadow-indigo-600/30 transition-colors"
+            className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium flex items-center gap-1.5 shadow-md shadow-indigo-600/30 transition-colors cursor-pointer"
           >
             <Save className="w-3.5 h-3.5" />
             <span>Save Anchors</span>
           </button>
           <button
+            type="button"
             onClick={() => {
-              if (handleSaveAll()) {
-                onOpenInTheatre({ ...reaction, anchors, chapters, highlights });
+              const saved = handleSaveAll();
+              if (saved) {
+                onOpenInTheatre(saved);
               }
             }}
-            className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5 transition-colors"
+            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Play className="w-3.5 h-3.5 ml-0.5" />
             <span>Test in Theatre</span>
@@ -304,6 +493,57 @@ export function CreatorStudio({
 
       {/* Main Studio Body */}
       <div className="flex-1 p-4 max-w-7xl mx-auto w-full flex flex-col gap-5">
+        {showUnsavedLeavePrompt && (
+          <div className="p-3.5 rounded-xl bg-amber-950/60 border border-amber-500/40 text-amber-100 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>
+                You have unsaved anchor or chapter changes. Save them before leaving, or keep them as a temporary draft?
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  const saved = handleSaveAll();
+                  if (saved) onBack();
+                }}
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold cursor-pointer"
+              >
+                Save & Leave
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleDiscardDraft();
+                  onBack();
+                }}
+                className="px-3 py-1.5 rounded-lg bg-rose-900/60 hover:bg-rose-800 border border-rose-500/40 text-rose-100 font-medium cursor-pointer"
+              >
+                Discard & Leave
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowUnsavedLeavePrompt(false)}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium cursor-pointer"
+              >
+                Stay
+              </button>
+            </div>
+          </div>
+        )}
+        {restoredDraftNotice && !showUnsavedLeavePrompt && (
+          <div className="p-3 rounded-xl bg-sky-950/60 border border-sky-500/40 text-sky-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <span>Restored unsaved calibration draft from this session.</span>
+            <button
+              type="button"
+              onClick={handleDiscardDraft}
+              className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-sky-500/30 text-sky-200 font-medium self-start sm:self-auto cursor-pointer"
+            >
+              Discard Draft
+            </button>
+          </div>
+        )}
         {saveError && (
           <div className="p-3 rounded-xl bg-rose-950/70 border border-rose-500/40 text-rose-200 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
@@ -332,16 +572,16 @@ export function CreatorStudio({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Source Video Frame Box */}
           <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold text-sky-400 uppercase tracking-wider">
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <div className="min-w-0 flex-1">
+                <span className="text-xs font-bold text-sky-400 uppercase tracking-wider block">
                   Source Timeline
                 </span>
-                <h4 className="text-sm font-semibold text-white truncate max-w-xs">
+                <h4 className="text-sm font-semibold text-white truncate">
                   {sourceVideo.title}
                 </h4>
               </div>
-              <span className="font-mono text-xs text-sky-300 bg-sky-950/60 border border-sky-500/30 px-2 py-0.5 rounded">
+              <span className="font-mono text-xs text-sky-300 bg-sky-950/60 border border-sky-500/30 px-2 py-0.5 rounded shrink-0">
                 {formatTime(sourceTime)}
               </span>
             </div>
@@ -349,14 +589,48 @@ export function CreatorStudio({
             {/* Real native video preview or provider timeline indicator */}
             <div className="w-full aspect-video bg-black rounded-lg border border-slate-800 flex items-center justify-center relative overflow-hidden">
               {canPlayNativeSourcePreview ? (
-                <video
-                  ref={sourcePreviewRef}
-                  src={resolvePlayableMediaUrl(sourceVideo.url)}
-                  muted
-                  playsInline
-                  preload="metadata"
-                  className="w-full h-full object-contain"
-                />
+                <>
+                  <video
+                    key={`${resolvedSourceUrl}-${sourceReloadKey}`}
+                    ref={sourcePreviewRef}
+                    src={resolvedSourceUrl}
+                    muted
+                    playsInline
+                    preload="metadata"
+                    onLoadedMetadata={(e) => {
+                      const el = e.currentTarget;
+                      setSourcePreviewError(null);
+                      if (Number.isFinite(el.duration) && el.duration > 0) {
+                        setSourceDuration(Math.round(el.duration));
+                      }
+                      try {
+                        el.currentTime = sourceTimeRef.current;
+                      } catch {}
+                    }}
+                    onError={(e) => {
+                      setIsPlayingTest(false);
+                      setSourcePreviewError(describeVideoMediaError(e.currentTarget, 'Source'));
+                    }}
+                    className="w-full h-full object-contain"
+                  />
+                  {sourcePreviewError && (
+                    <div className="absolute inset-0 bg-slate-950/90 p-4 flex flex-col items-center justify-center text-center gap-2.5">
+                      <AlertCircle className="w-6 h-6 text-rose-400" />
+                      <p className="text-xs text-rose-200 max-w-xs">{sourcePreviewError}</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSourcePreviewError(null);
+                          setSourceReloadKey((k) => k + 1);
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>Retry Preview</span>
+                      </button>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="text-center px-4">
                   <div className="font-mono text-2xl font-bold text-sky-400">
@@ -377,36 +651,37 @@ export function CreatorStudio({
               <input
                 type="range"
                 min="0"
-                max={sourceVideo.duration}
+                max={sourceDuration}
                 step="0.1"
-                value={sourceTime}
+                value={Math.min(sourceTime, sourceDuration)}
                 onChange={(e) => {
                   const val = parseFloat(e.target.value);
                   setSourceTime(val);
                   const mapped = mapSourceToReaction(val, anchors);
-                  setReactionTime(mapped);
+                  setReactionTime(Math.min(reactionDuration, mapped));
                   syncScrubPreviewVideos(val, mapped);
                 }}
+                aria-label="Source timeline scrubber"
                 className="flex-1 h-2 bg-slate-700 rounded appearance-none accent-sky-400 cursor-pointer"
               />
               <span className="text-[11px] font-mono text-slate-400 w-10 text-right">
-                {formatTime(sourceVideo.duration)}
+                {formatTime(sourceDuration)}
               </span>
             </div>
           </div>
 
           {/* Reaction Video Frame Box */}
           <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <div className="min-w-0 flex-1">
+                <span className="text-xs font-bold text-purple-400 uppercase tracking-wider block">
                   Reaction Timeline
                 </span>
-                <h4 className="text-sm font-semibold text-white truncate max-w-xs">
+                <h4 className="text-sm font-semibold text-white truncate">
                   {reaction.title}
                 </h4>
               </div>
-              <span className="font-mono text-xs text-purple-300 bg-purple-950/60 border border-purple-500/30 px-2 py-0.5 rounded">
+              <span className="font-mono text-xs text-purple-300 bg-purple-950/60 border border-purple-500/30 px-2 py-0.5 rounded shrink-0">
                 {formatTime(reactionTime)}
               </span>
             </div>
@@ -414,14 +689,48 @@ export function CreatorStudio({
             {/* Real native video preview or provider timeline indicator */}
             <div className="w-full aspect-video bg-black rounded-lg border border-slate-800 flex items-center justify-center relative overflow-hidden">
               {canPlayNativeReactionPreview ? (
-                <video
-                  ref={reactionPreviewRef}
-                  src={resolvePlayableMediaUrl(reaction.url)}
-                  muted
-                  playsInline
-                  preload="metadata"
-                  className="w-full h-full object-contain"
-                />
+                <>
+                  <video
+                    key={`${resolvedReactionUrl}-${reactionReloadKey}`}
+                    ref={reactionPreviewRef}
+                    src={resolvedReactionUrl}
+                    muted
+                    playsInline
+                    preload="metadata"
+                    onLoadedMetadata={(e) => {
+                      const el = e.currentTarget;
+                      setReactionPreviewError(null);
+                      if (Number.isFinite(el.duration) && el.duration > 0) {
+                        setReactionDuration(Math.round(el.duration));
+                      }
+                      try {
+                        el.currentTime = reactionTimeRef.current;
+                      } catch {}
+                    }}
+                    onError={(e) => {
+                      setIsPlayingTest(false);
+                      setReactionPreviewError(describeVideoMediaError(e.currentTarget, 'Reaction'));
+                    }}
+                    className="w-full h-full object-contain"
+                  />
+                  {reactionPreviewError && (
+                    <div className="absolute inset-0 bg-slate-950/90 p-4 flex flex-col items-center justify-center text-center gap-2.5">
+                      <AlertCircle className="w-6 h-6 text-rose-400" />
+                      <p className="text-xs text-rose-200 max-w-xs">{reactionPreviewError}</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReactionPreviewError(null);
+                          setReactionReloadKey((k) => k + 1);
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>Retry Preview</span>
+                      </button>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="text-center px-4">
                   <div className="font-mono text-2xl font-bold text-purple-400">
@@ -442,18 +751,19 @@ export function CreatorStudio({
               <input
                 type="range"
                 min="0"
-                max={reaction.duration}
+                max={reactionDuration}
                 step="0.1"
-                value={reactionTime}
+                value={Math.min(reactionTime, reactionDuration)}
                 onChange={(e) => {
                   const val = parseFloat(e.target.value);
                   setReactionTime(val);
                   syncScrubPreviewVideos(sourceTime, val);
                 }}
+                aria-label="Reaction timeline scrubber"
                 className="flex-1 h-2 bg-slate-700 rounded appearance-none accent-purple-400 cursor-pointer"
               />
               <span className="text-[11px] font-mono text-slate-400 w-10 text-right">
-                {formatTime(reaction.duration)}
+                {formatTime(reactionDuration)}
               </span>
             </div>
           </div>

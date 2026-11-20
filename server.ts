@@ -62,12 +62,21 @@ function isSafePartyMediaUrl(rawUrl: unknown): boolean {
 
 const ALLOWED_ANCHOR_TYPES = new Set<AnchorType>(['intro', 'linear', 'pause', 'skip', 'outro']);
 
+function sanitizePlainText(input: unknown, maxLen: number): string {
+  if (typeof input !== 'string') return '';
+  return input
+    .replace(/[\u0000-\u001F\u007F]/g, '')
+    .replace(/[<>]/g, '')
+    .trim()
+    .slice(0, maxLen);
+}
+
 function validateAndSanitizeSource(input: any): { valid: boolean; source?: VideoSource; error?: string } {
   if (!input || typeof input !== 'object') {
     return { valid: false, error: 'Invalid source object' };
   }
-  const id = typeof input.id === 'string' ? input.id.trim().slice(0, 100) : '';
-  const title = typeof input.title === 'string' ? sanitizeHtml(input.title.trim().slice(0, 120)) : '';
+  const id = sanitizePlainText(input.id, 100);
+  const title = sanitizePlainText(input.title, 120);
   const url = typeof input.url === 'string' ? input.url.trim() : '';
 
   if (!id || !title) {
@@ -92,26 +101,17 @@ function validateAndSanitizeSource(input: any): { valid: boolean; source?: Video
   return {
     valid: true,
     source: {
-      id: sanitizeHtml(id),
+      id,
       title,
-      creator:
-        typeof input.creator === 'string' && input.creator.trim()
-          ? sanitizeHtml(input.creator.trim().slice(0, 60))
-          : 'Source Creator',
+      creator: sanitizePlainText(input.creator, 60) || 'Source Creator',
       duration,
       url,
       thumbnail:
         typeof input.thumbnail === 'string' && isSafePartyMediaUrl(input.thumbnail)
           ? input.thumbnail.trim()
           : 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80',
-      category:
-        typeof input.category === 'string' && input.category.trim()
-          ? (sanitizeHtml(input.category.trim().slice(0, 40)) as VideoSource['category'])
-          : 'Movies & TV',
-      description:
-        typeof input.description === 'string'
-          ? sanitizeHtml(input.description.trim().slice(0, 300))
-          : 'Synchronized stream source',
+      category: (sanitizePlainText(input.category, 40) || 'Movies & TV') as VideoSource['category'],
+      description: sanitizePlainText(input.description, 300) || 'Synchronized stream source',
     },
   };
 }
@@ -123,16 +123,10 @@ function validateAndSanitizeReaction(
   if (!input || typeof input !== 'object') {
     return { valid: false, error: 'Invalid reaction object' };
   }
-  const id = typeof input.id === 'string' ? input.id.trim().slice(0, 100) : '';
-  const sourceId = typeof input.sourceId === 'string' ? sanitizeHtml(input.sourceId.trim().slice(0, 100)) : '';
-  const creator =
-    typeof input.creator === 'string' && input.creator.trim()
-      ? sanitizeHtml(input.creator.trim().slice(0, 60))
-      : '';
-  const title =
-    typeof input.title === 'string' && input.title.trim()
-      ? sanitizeHtml(input.title.trim().slice(0, 120))
-      : '';
+  const id = sanitizePlainText(input.id, 100);
+  const sourceId = sanitizePlainText(input.sourceId, 100);
+  const creator = sanitizePlainText(input.creator, 60);
+  const title = sanitizePlainText(input.title, 120);
   const url = typeof input.url === 'string' ? input.url.trim() : '';
 
   if (!id || !creator || !title) {
@@ -167,11 +161,11 @@ function validateAndSanitizeReaction(
     }
     const anchorType: AnchorType = ALLOWED_ANCHOR_TYPES.has(a.type) ? a.type : 'linear';
     anchors.push({
-      id: typeof a.id === 'string' && a.id.trim() ? sanitizeHtml(a.id.trim().slice(0, 60)) : `anc-${i}`,
+      id: sanitizePlainText(a.id, 60) || `anc-${i}`,
       sourceTime: sTime,
       reactionTime: rTime,
       type: anchorType,
-      label: typeof a.label === 'string' ? sanitizeHtml(a.label.trim().slice(0, 80)) : undefined,
+      label: sanitizePlainText(a.label, 80) || undefined,
     });
   }
 
@@ -197,13 +191,10 @@ function validateAndSanitizeReaction(
   return {
     valid: true,
     reaction: {
-      id: sanitizeHtml(id),
+      id,
       sourceId,
       creator,
-      channelName:
-        typeof input.channelName === 'string' && input.channelName.trim()
-          ? sanitizeHtml(input.channelName.trim().slice(0, 60))
-          : `${creator} Live`,
+      channelName: sanitizePlainText(input.channelName, 60) || `${creator} Live`,
       avatar:
         typeof input.avatar === 'string' && isSafePartyMediaUrl(input.avatar)
           ? input.avatar.trim()
@@ -219,8 +210,8 @@ function validateAndSanitizeReaction(
       anchors,
       chapters: Array.isArray(input.chapters)
         ? input.chapters.slice(0, 30).map((c: any, idx: number) => ({
-            id: typeof c?.id === 'string' ? sanitizeHtml(c.id.slice(0, 50)) : `ch-${idx}`,
-            title: typeof c?.title === 'string' ? sanitizeHtml(c.title.slice(0, 80)) : 'Chapter',
+            id: sanitizePlainText(c?.id, 50) || `ch-${idx}`,
+            title: sanitizePlainText(c?.title, 80) || 'Chapter',
             sourceTimestamp: isValidTimestamp(Number(c?.sourceTimestamp)) ? Number(c.sourceTimestamp) : 0,
             reactionTimestamp: isValidTimestamp(Number(c?.reactionTimestamp)) ? Number(c.reactionTimestamp) : 0,
           }))
@@ -475,7 +466,8 @@ export function createSyncViewApp(customPartyManager?: WatchPartyManager): expre
 // Get room details by ID or 6-digit Code (Safe view - hostToken NEVER exposed)
 app.get('/api/parties/:id', validateRoomParam, async (req: Request, res: Response) => {
   try {
-    const room = await partyManager.getRoom(req.params.id);
+    const participantToken = extractParticipantToken(req);
+    const room = await partyManager.getRoom(req.params.id, participantToken || undefined);
     if (!room) {
       return res.status(404).json({ error: 'Watch party not found' });
     }
@@ -527,7 +519,7 @@ app.post(
   async (req: Request, res: Response) => {
     try {
       const token = extractHostToken(req);
-      const { command, sourceTime, playbackRate } = req.body;
+      const { command, sourceTime, playbackRate, expectedSeq } = req.body;
 
       if (!isValidCommandType(command)) {
         return res.status(400).json({ error: `Invalid command type: ${command}` });
@@ -545,9 +537,13 @@ app.post(
         command,
         sourceTime,
         playbackRate,
+        expectedSeq: typeof expectedSeq === 'number' ? expectedSeq : undefined,
       });
 
       if (!result.success) {
+        if (result.conflict) {
+          return res.status(409).json({ error: result.error, playbackState: result.state });
+        }
         return res.status(403).json({ error: result.error });
       }
 
@@ -698,6 +694,42 @@ app.post(
       res.json({ success: true, newHostToken: result.newHostToken });
     } catch (err) {
       res.status(500).json({ error: 'Error reassigning host' });
+    }
+  }
+);
+
+// Explicit participant leave (marks participant disconnected immediately)
+app.post(
+  '/api/parties/:id/leave',
+  createRequireRoomMembership(partyManager),
+  async (req: Request, res: Response) => {
+    try {
+      const rawToken = req.rawParticipantToken || extractParticipantToken(req);
+      const result = await partyManager.leaveRoom(req.params.id, rawToken);
+      if (!result.success) {
+        return res.status(400).json({ error: result.error });
+      }
+      res.json({ success: true });
+    } catch {
+      res.status(500).json({ error: 'Error leaving watch party' });
+    }
+  }
+);
+
+// Safe host claim/recovery (succeeds for designated host or when current host is disconnected)
+app.post(
+  '/api/parties/:id/claim-host',
+  createRequireRoomMembership(partyManager),
+  async (req: Request, res: Response) => {
+    try {
+      const rawToken = req.rawParticipantToken || extractParticipantToken(req);
+      const result = await partyManager.claimHost(req.params.id, rawToken);
+      if (!result.success) {
+        return res.status(403).json({ error: result.error });
+      }
+      res.json({ success: true, hostToken: result.hostToken, room: result.room });
+    } catch {
+      res.status(500).json({ error: 'Error claiming host controls' });
     }
   }
 );

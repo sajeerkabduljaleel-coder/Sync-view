@@ -37,9 +37,39 @@ export function escapeHtml(str: string): string {
 export class WatchPartyManager {
   private repository: IWatchPartyRepository;
   private readonly roomTtlMs = 1000 * 60 * 60 * 24; // 24 hours
+  private readonly participantTimeoutMs: number;
 
-  constructor(repository?: IWatchPartyRepository) {
+  constructor(
+    repository?: IWatchPartyRepository,
+    options?: { participantTimeoutMs?: number }
+  ) {
     this.repository = repository || new SingleInstanceFileWatchPartyRepository();
+    this.participantTimeoutMs =
+      typeof options?.participantTimeoutMs === 'number' && options.participantTimeoutMs > 0
+        ? options.participantTimeoutMs
+        : 15000;
+  }
+
+  private applyPresenceToRoom(data: StoredRoomData, now = Date.now()): void {
+    const sessionsByParticipantId = new Map<string, ParticipantSession>();
+    for (const session of Object.values(data.sessions || {})) {
+      sessionsByParticipantId.set(session.participantId, session);
+    }
+
+    for (const p of data.room.participants) {
+      const session = sessionsByParticipantId.get(p.id);
+      if (!session) {
+        p.status = 'disconnected';
+        continue;
+      }
+      const lastSeen = typeof session.lastSeenAt === 'number' ? session.lastSeenAt : session.joinedAt;
+      if (session.explicitlyLeft || now - lastSeen > this.participantTimeoutMs) {
+        p.status = 'disconnected';
+      } else {
+        p.status = 'watching';
+      }
+      p.isHost = p.id === data.room.hostId;
+    }
   }
 
   public generateRoomCode(): string {
@@ -109,6 +139,8 @@ export class WatchPartyManager {
       isHost: true,
       roomId,
       joinedAt: now,
+      lastSeenAt: now,
+      explicitlyLeft: false,
       lastMessageTime: 0,
       messageWindowCount: 0,
     };
@@ -162,10 +194,33 @@ export class WatchPartyManager {
 
   /**
    * Fetches room state, sanitized using an explicit field allowlist to guarantee no tokens or hashes leak.
+   * When participantToken is provided, refreshes that participant's presence heartbeat.
    */
-  public async getRoom(idOrCode: string): Promise<WatchParty | null> {
+  public async getRoom(idOrCode: string, participantToken?: string): Promise<WatchParty | null> {
     const data = await this.findRoomData(idOrCode);
     if (!data) return null;
+
+    const now = Date.now();
+    if (participantToken) {
+      const tokenHash = this.hashToken(participantToken);
+      const session = data.sessions[tokenHash] || data.sessions[participantToken];
+      if (session) {
+        const wasDisconnected =
+          session.explicitlyLeft ||
+          now - (typeof session.lastSeenAt === 'number' ? session.lastSeenAt : session.joinedAt) >
+            this.participantTimeoutMs;
+        session.lastSeenAt = now;
+        session.explicitlyLeft = false;
+        const p = data.room.participants.find((item) => item.id === session.participantId);
+        if (p) p.status = 'watching';
+        if (wasDisconnected || now - data.lastActivity >= 1500) {
+          data.lastActivity = now;
+          await this.repository.saveRoom(data);
+        }
+      }
+    }
+
+    this.applyPresenceToRoom(data, now);
     return this.toPublicRoomDTO(data.room);
   }
 
@@ -177,7 +232,7 @@ export class WatchPartyManager {
     idOrCode: string,
     participantName: string,
     existingToken?: string
-  ): Promise<{ room: WatchParty; participantId: string; participantToken: string } | null> {
+  ): Promise<{ room: WatchParty; participantId: string; participantToken: string; isHost: boolean } | null> {
     const data = await this.findRoomData(idOrCode);
     if (!data) return null;
 
@@ -188,12 +243,31 @@ export class WatchPartyManager {
       const existingHash = this.hashToken(existingToken);
       const existingSession = data.sessions[existingHash] || data.sessions[existingToken];
       if (existingSession) {
+        existingSession.lastSeenAt = now;
+        existingSession.explicitlyLeft = false;
+        const existingParticipant = data.room.participants.find(
+          (p) => p.id === existingSession.participantId
+        );
+        if (existingParticipant) {
+          existingParticipant.status = 'watching';
+        } else {
+          data.room.participants.push({
+            id: existingSession.participantId,
+            name: existingSession.name,
+            avatar: existingSession.avatar,
+            isHost: data.room.hostId === existingSession.participantId,
+            joinedAt: existingSession.joinedAt,
+            status: 'watching',
+          });
+        }
+        this.applyPresenceToRoom(data, now);
         data.lastActivity = now;
         await this.repository.saveRoom(data);
         return {
           room: this.toPublicRoomDTO(data.room),
           participantId: existingSession.participantId,
           participantToken: existingToken,
+          isHost: data.room.hostId === existingSession.participantId,
         };
       }
     }
@@ -220,6 +294,8 @@ export class WatchPartyManager {
       isHost: false,
       roomId: data.room.id,
       joinedAt: now,
+      lastSeenAt: now,
+      explicitlyLeft: false,
       lastMessageTime: 0,
       messageWindowCount: 0,
     };
@@ -228,6 +304,7 @@ export class WatchPartyManager {
     data.room.participants = data.room.participants.filter((p) => p.id !== participantId);
     data.room.participants.push(participant);
     data.sessions[participantTokenHash] = session;
+    this.applyPresenceToRoom(data, now);
     data.lastActivity = now;
 
     data.room.chatMessages.push({
@@ -246,6 +323,125 @@ export class WatchPartyManager {
       room: this.toPublicRoomDTO(data.room),
       participantId,
       participantToken,
+      isHost: false,
+    };
+  }
+
+  /**
+   * Explicitly marks a participant as disconnected when they exit the Watch Party.
+   */
+  public async leaveRoom(
+    idOrCode: string,
+    participantToken: string
+  ): Promise<{ success: boolean; error?: string }> {
+    const data = await this.findRoomData(idOrCode);
+    if (!data) return { success: false, error: 'Room not found' };
+
+    const tokenHash = this.hashToken(participantToken);
+    const session = data.sessions[tokenHash] || data.sessions[participantToken];
+    if (!session) {
+      return { success: false, error: 'Unauthorized: valid participant session required' };
+    }
+
+    const now = Date.now();
+    session.explicitlyLeft = true;
+    const p = data.room.participants.find((item) => item.id === session.participantId);
+    if (p) {
+      p.status = 'disconnected';
+    }
+
+    data.room.chatMessages.push({
+      id: `msg-${now}-${crypto.randomBytes(2).toString('hex')}`,
+      senderId: 'system',
+      senderName: 'SyncView Bot',
+      avatar: '',
+      text: `${session.name} left the party.`,
+      timestamp: now,
+      isHost: false,
+    });
+    if (data.room.chatMessages.length > 200) {
+      data.room.chatMessages.shift();
+    }
+
+    this.applyPresenceToRoom(data, now);
+    data.lastActivity = now;
+    await this.repository.saveRoom(data);
+    return { success: true };
+  }
+
+  /**
+   * Safely claims host credentials for a verified room member when either:
+   * 1. The caller is already the designated host (e.g. completing an explicit host reassignment), OR
+   * 2. The current host is disconnected (left explicitly or timed out).
+   * Rejects any takeover attempt while an active host is connected.
+   */
+  public async claimHost(
+    idOrCode: string,
+    participantToken: string
+  ): Promise<{ success: boolean; hostToken?: string; room?: WatchParty; error?: string }> {
+    const data = await this.findRoomData(idOrCode);
+    if (!data) return { success: false, error: 'Room not found' };
+
+    const tokenHash = this.hashToken(participantToken);
+    const session = data.sessions[tokenHash] || data.sessions[participantToken];
+    if (!session) {
+      return { success: false, error: 'Unauthorized: valid participant session required' };
+    }
+
+    const now = Date.now();
+    session.lastSeenAt = now;
+    session.explicitlyLeft = false;
+    this.applyPresenceToRoom(data, now);
+
+    const isAlreadyDesignatedHost = data.room.hostId === session.participantId;
+    const currentHostParticipant = data.room.participants.find((p) => p.id === data.room.hostId);
+    const isCurrentHostDisconnected =
+      !currentHostParticipant || currentHostParticipant.status === 'disconnected';
+
+    if (!isAlreadyDesignatedHost && !isCurrentHostDisconnected) {
+      return {
+        success: false,
+        error: 'Cannot claim host controls while the current host is still connected.',
+      };
+    }
+
+    for (const s of Object.values(data.sessions)) {
+      s.isHost = s.participantId === session.participantId;
+    }
+    data.room.participants.forEach((p) => {
+      p.isHost = p.id === session.participantId;
+      if (p.id === session.participantId) {
+        p.status = 'watching';
+      }
+    });
+
+    const newHostToken = this.generateSecureToken();
+    data.hostTokenHash = this.hashToken(newHostToken);
+    delete data.hostToken;
+    data.room.hostId = session.participantId;
+    data.room.hostName = session.name;
+    data.lastActivity = now;
+
+    if (!isAlreadyDesignatedHost) {
+      data.room.chatMessages.push({
+        id: `msg-${now}-${crypto.randomBytes(2).toString('hex')}`,
+        senderId: 'system',
+        senderName: 'SyncView Bot',
+        avatar: '',
+        text: `${session.name} took over as Watch Party host.`,
+        timestamp: now,
+        isHost: false,
+      });
+      if (data.room.chatMessages.length > 200) {
+        data.room.chatMessages.shift();
+      }
+    }
+
+    await this.repository.saveRoom(data);
+    return {
+      success: true,
+      hostToken: newHostToken,
+      room: this.toPublicRoomDTO(data.room),
     };
   }
 
@@ -282,7 +478,7 @@ export class WatchPartyManager {
     idOrCode: string,
     token: string,
     cmd: PlaybackCommand
-  ): Promise<{ success: boolean; state?: WatchParty['playbackState']; error?: string }> {
+  ): Promise<{ success: boolean; state?: WatchParty['playbackState']; error?: string; conflict?: boolean }> {
     const data = await this.findRoomData(idOrCode);
     if (!data) return { success: false, error: 'Room not found' };
 
@@ -293,6 +489,19 @@ export class WatchPartyManager {
 
     const now = Date.now();
     const current = data.room.playbackState;
+
+    if (
+      typeof cmd.expectedSeq === 'number' &&
+      Number.isFinite(cmd.expectedSeq) &&
+      cmd.expectedSeq < current.seq
+    ) {
+      return {
+        success: false,
+        conflict: true,
+        state: current,
+        error: `Out-of-order command rejected (expectedSeq ${cmd.expectedSeq} < current seq ${current.seq})`,
+      };
+    }
 
     const VALID_COMMANDS = new Set(['play', 'pause', 'seek', 'rate', 'change_media']);
     if (!VALID_COMMANDS.has(cmd.command)) {
@@ -331,6 +540,14 @@ export class WatchPartyManager {
     }
 
     const nextSeq = current.seq + 1;
+
+    // Refresh host session presence
+    for (const session of Object.values(data.sessions || {})) {
+      if (session.participantId === data.room.hostId) {
+        session.lastSeenAt = now;
+        session.explicitlyLeft = false;
+      }
+    }
 
     data.room.playbackState = {
       isPlaying: newIsPlaying,
@@ -389,6 +606,8 @@ export class WatchPartyManager {
       }
     }
     session.lastMessageTime = now;
+    session.lastSeenAt = now;
+    session.explicitlyLeft = false;
 
     // Sender identity is strictly derived from server session!
     const msg: ChatMessage = {
@@ -449,6 +668,8 @@ export class WatchPartyManager {
     }
 
     const now = Date.now();
+    session.lastSeenAt = now;
+    session.explicitlyLeft = false;
     const note: ReactionNote = {
       id: `note-${now}-${crypto.randomBytes(3).toString('hex')}`,
       userId: session.participantId, // Derived from server session
@@ -549,7 +770,11 @@ export class WatchPartyManager {
 
   public async getAllRooms(): Promise<WatchParty[]> {
     const records = await this.repository.getAllRooms();
-    return records.map((r) => this.toPublicRoomDTO(r.room));
+    const now = Date.now();
+    return records.map((r) => {
+      this.applyPresenceToRoom(r, now);
+      return this.toPublicRoomDTO(r.room);
+    });
   }
 
   public async findRoomData(idOrCode: string): Promise<StoredRoomData | null> {

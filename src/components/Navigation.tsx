@@ -42,35 +42,52 @@ export function Navigation({
   onOpenAuth,
 }: NavigationProps) {
   return (
-    <header className="sticky top-0 z-40 bg-slate-950/85 backdrop-blur-md border-b border-slate-800/80 px-4 sm:px-6 py-2.5">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+    <header className="sticky top-0 z-40 bg-slate-950/85 backdrop-blur-md border-b border-slate-800/80 px-3 sm:px-6 py-2.5">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4">
         {/* Left: Brand Logo & Mode Switcher */}
-        <div className="flex items-center gap-4">
-          <div
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+          <button
+            type="button"
             onClick={() => {
               if (currentMode === 'viewer') onSelectViewerTab('home');
               else onSelectReactorTab('home');
             }}
-            className="flex items-center gap-2.5 cursor-pointer group"
+            className="flex items-center gap-2 cursor-pointer group shrink-0 text-left"
           >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-lg shadow-indigo-600/30 group-hover:scale-105 transition-transform">
-              <Tv className="w-5 h-5" />
+            <div
+              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-white shadow-lg group-hover:scale-105 transition-transform ${
+                currentMode === 'reactor'
+                  ? 'bg-gradient-to-tr from-emerald-600 via-emerald-500 to-teal-500 shadow-emerald-600/30'
+                  : 'bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-500 shadow-indigo-600/30'
+              }`}
+            >
+              <Tv className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div className="flex flex-col">
-              <span className="font-extrabold text-base tracking-tight text-white flex items-center gap-1">
+              <span className="font-extrabold text-sm sm:text-base tracking-tight text-white flex items-center gap-1">
                 SyncView
               </span>
-              <span className="text-[9px] tracking-wider uppercase font-semibold text-indigo-400 -mt-1">
-                Synced Reactions
+              <span
+                className={`hidden sm:block text-[9px] tracking-wider uppercase font-semibold -mt-1 ${
+                  currentMode === 'reactor' ? 'text-emerald-400' : 'text-indigo-400'
+                }`}
+              >
+                {currentMode === 'reactor' ? 'Creator Studio' : 'Synced Reactions'}
               </span>
             </div>
-          </div>
+          </button>
 
           {/* Mode Switcher Pill */}
-          <div className="flex items-center bg-slate-900 border border-slate-800 p-0.5 rounded-full text-xs font-semibold ml-2">
+          <div
+            role="group"
+            aria-label="Workspace mode"
+            className="flex items-center bg-slate-900 border border-slate-800 p-0.5 rounded-full text-[11px] sm:text-xs font-semibold shrink-0"
+          >
             <button
+              type="button"
               onClick={() => onSwitchMode('viewer')}
-              className={`px-3 py-1 rounded-full transition-all cursor-pointer ${
+              aria-pressed={currentMode === 'viewer'}
+              className={`px-2.5 sm:px-3 py-1 rounded-full transition-all cursor-pointer ${
                 currentMode === 'viewer'
                   ? 'bg-indigo-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
@@ -79,10 +96,12 @@ export function Navigation({
               Viewer
             </button>
             <button
+              type="button"
               onClick={() => onSwitchMode('reactor')}
-              className={`px-3 py-1 rounded-full transition-all cursor-pointer ${
+              aria-pressed={currentMode === 'reactor'}
+              className={`px-2.5 sm:px-3 py-1 rounded-full transition-all cursor-pointer ${
                 currentMode === 'reactor'
-                  ? 'bg-indigo-600 text-white shadow-sm'
+                  ? 'bg-emerald-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -230,7 +249,9 @@ export function Navigation({
       {/* Mobile Navigation Bar (< md) */}
       <nav
         aria-label="Mobile sections"
-        className="flex md:hidden items-center gap-1 overflow-x-auto pt-2 mt-2 border-t border-slate-800/60 text-xs font-medium"
+        className={`flex md:hidden items-center gap-1 overflow-x-auto pt-2 mt-2 border-t text-xs font-medium ${
+          currentMode === 'reactor' ? 'border-emerald-500/30' : 'border-slate-800/60'
+        }`}
       >
         {currentMode === 'viewer' ? (
           <>

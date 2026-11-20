@@ -84,7 +84,9 @@ interface TheatreProps {
   roomCode?: string;
   hostToken?: string;
   participantToken?: string;
+  participantId?: string;
   onExit?: () => void;
+  onLeavePartyToPrivate?: () => void;
   onOpenCreatorStudio?: (reaction: ReactionVideo) => void;
   onStreamsChanged?: (config: {
     source: VideoSource;
@@ -109,7 +111,9 @@ export function Theatre({
   roomCode,
   hostToken,
   participantToken,
+  participantId,
   onExit,
+  onLeavePartyToPrivate,
   onOpenCreatorStudio,
   onStreamsChanged,
   onJoinPartyByCode,
@@ -120,6 +124,10 @@ export function Theatre({
   // Sync controller instance (authoritative engine)
   const controllerRef = useRef<SessionSyncController | null>(null);
   const lastServerSeqRef = useRef<number>(0);
+  const pollRequestIdRef = useRef<number>(0);
+  const isPollInFlightRef = useRef<boolean>(false);
+  const seekBroadcastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasAttemptedAutoClaimRef = useRef<boolean>(false);
 
   const [sourceVideo, setSourceVideo] = useState<VideoSource | null>(initialSourceVideo || null);
   const [primaryReaction, setPrimaryReaction] = useState<ReactionVideo | null>(initialPrimaryReaction || null);
@@ -129,6 +137,7 @@ export function Theatre({
   // Authoritative watch-party host & participant tracking
   const [localHostToken, setLocalHostToken] = useState<string | undefined>(hostToken);
   const [effectiveIsHost, setEffectiveIsHost] = useState<boolean>(isHost);
+  const [isClaimingHost, setIsClaimingHost] = useState<boolean>(false);
   const [partyParticipants, setPartyParticipants] = useState<WatchPartyParticipant[]>([]);
   const [partyHostId, setPartyHostId] = useState<string>('');
   const [partyActionMessage, setPartyActionMessage] = useState<string | null>(null);
@@ -240,13 +249,71 @@ export function Theatre({
   useEffect(() => {
     setLocalHostToken(hostToken);
     setEffectiveIsHost(Boolean(isHost));
+    hasAttemptedAutoClaimRef.current = false;
   }, [hostToken, isHost, roomCode]);
+
+  const handleClaimHost = React.useCallback(
+    async (silent = false) => {
+      if (!roomCode || !participantToken || isClaimingHost) return;
+      setIsClaimingHost(true);
+      try {
+        const res = await fetch(`/api/parties/${roomCode}/claim-host`, {
+          method: 'POST',
+          headers: {
+            'x-participant-token': participantToken,
+          },
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.hostToken) {
+          setLocalHostToken(data.hostToken);
+          setEffectiveIsHost(true);
+          if (data.room?.hostId) setPartyHostId(data.room.hostId);
+          if (Array.isArray(data.room?.participants)) setPartyParticipants(data.room.participants);
+          try {
+            sessionStorage.setItem(
+              `syncview_party_creds_${roomCode.toUpperCase()}`,
+              JSON.stringify({
+                hostToken: data.hostToken,
+                participantToken,
+                participantId,
+              })
+            );
+          } catch {}
+          setPartyActionMessage('You are now the Watch Party host and control playback.');
+          return;
+        }
+        if (!silent) {
+          setPartyActionMessage(data.error || 'Unable to claim host controls right now.');
+        }
+      } catch {
+        if (!silent) {
+          setPartyActionMessage('Network error while claiming host controls.');
+        }
+      } finally {
+        setIsClaimingHost(false);
+      }
+    },
+    [roomCode, participantToken, participantId, isClaimingHost]
+  );
 
   const fetchLatestPartyAndSync = React.useCallback(
     async (forceResync = false) => {
       if (!roomCode) return;
+      if (!forceResync && isPollInFlightRef.current) return;
+
+      const requestId = ++pollRequestIdRef.current;
+      isPollInFlightRef.current = true;
+
       try {
-        const res = await fetch(`/api/parties/${roomCode}`);
+        const headers: Record<string, string> = {};
+        if (participantToken) {
+          headers['x-participant-token'] = participantToken;
+        }
+        const res = await fetch(`/api/parties/${roomCode}`, { headers });
+
+        // Drop superseded response if a newer request already started
+        if (requestId !== pollRequestIdRef.current) return;
+
         if (!res.ok) {
           hadConnectionLossRef.current = true;
           if (res.status === 404) {
@@ -257,6 +324,8 @@ export function Theatre({
           return;
         }
         const data = await res.json();
+        if (requestId !== pollRequestIdRef.current) return;
+
         const room = data.room;
         if (!room) return;
 
@@ -274,34 +343,74 @@ export function Theatre({
         if (Array.isArray(room.participants)) setPartyParticipants(room.participants);
         if (room.hostId) setPartyHostId(room.hostId);
 
-        if (!effectiveIsHost && room.playbackState && controllerRef.current) {
-          const serverSeq = room.playbackState.seq;
-          const estimatedTime = data.estimatedSourceTime ?? room.playbackState.sourceTime;
-          const localTime = controllerRef.current.getSourceTime();
-          const driftExceeded =
-            room.playbackState.isPlaying && Math.abs(localTime - estimatedTime) > 1.8;
+        // If the server designated this participant as host (e.g. via reassignment), claim fresh hostToken automatically
+        if (
+          participantId &&
+          participantToken &&
+          room.hostId === participantId &&
+          !localHostToken &&
+          !hasAttemptedAutoClaimRef.current
+        ) {
+          hasAttemptedAutoClaimRef.current = true;
+          void handleClaimHost(true);
+        }
 
-          if (forceResync || recovered || serverSeq > lastServerSeqRef.current || driftExceeded) {
+        // If another participant became host, revoke stale local host UI immediately
+        if (participantId && room.hostId && room.hostId !== participantId && effectiveIsHost) {
+          setEffectiveIsHost(false);
+          setLocalHostToken(undefined);
+          try {
+            sessionStorage.setItem(
+              `syncview_party_creds_${roomCode.toUpperCase()}`,
+              JSON.stringify({ participantToken, participantId })
+            );
+          } catch {}
+        }
+
+        if (room.playbackState) {
+          const serverSeq = Number(room.playbackState.seq) || 0;
+          // Strictly ignore out-of-order stale responses from earlier sequence numbers
+          if (serverSeq < lastServerSeqRef.current) {
+            return;
+          }
+
+          if (effectiveIsHost) {
             lastServerSeqRef.current = Math.max(lastServerSeqRef.current, serverSeq);
-            controllerRef.current.seekToSourceTime(estimatedTime);
-            if (room.playbackState.isPlaying) {
-              await controllerRef.current.play();
-            } else {
-              controllerRef.current.pause();
+          } else if (controllerRef.current) {
+            const estimatedTime = data.estimatedSourceTime ?? room.playbackState.sourceTime;
+            const localTime = controllerRef.current.getSourceTime();
+            const driftExceeded =
+              room.playbackState.isPlaying && Math.abs(localTime - estimatedTime) > 1.8;
+
+            if (forceResync || recovered || serverSeq > lastServerSeqRef.current || driftExceeded) {
+              lastServerSeqRef.current = Math.max(lastServerSeqRef.current, serverSeq);
+              controllerRef.current.seekToSourceTime(estimatedTime);
+              if (room.playbackState.isPlaying) {
+                await controllerRef.current.play();
+              } else {
+                controllerRef.current.pause();
+              }
             }
           }
         }
       } catch {
+        if (requestId !== pollRequestIdRef.current) return;
         hadConnectionLossRef.current = true;
         setPartyConnectionError('Connection to Watch Party lost — retrying automatically...');
+      } finally {
+        if (requestId === pollRequestIdRef.current) {
+          isPollInFlightRef.current = false;
+        }
       }
     },
-    [roomCode, effectiveIsHost]
+    [roomCode, effectiveIsHost, participantToken, participantId, localHostToken, handleClaimHost]
   );
 
   // Reset sequence counter and poll watch party state
   useEffect(() => {
     lastServerSeqRef.current = 0;
+    pollRequestIdRef.current += 1;
+    isPollInFlightRef.current = false;
     hadConnectionLossRef.current = false;
     setPartyActionMessage(null);
     setPartyConnectionError(null);
@@ -324,6 +433,10 @@ export function Theatre({
     return () => {
       isMounted = false;
       clearInterval(interval);
+      if (seekBroadcastTimerRef.current) {
+        clearTimeout(seekBroadcastTimerRef.current);
+        seekBroadcastTimerRef.current = null;
+      }
     };
   }, [roomCode, fetchLatestPartyAndSync]);
 
@@ -372,6 +485,46 @@ export function Theatre({
     }
   }, [primaryReaction, extraReactions]);
 
+  const broadcastHostCommand = async (payload: {
+    command: 'play' | 'pause' | 'seek';
+    sourceTime: number;
+  }) => {
+    if (!roomCode || !effectiveIsHost || !localHostToken) return;
+    try {
+      const res = await fetch(`/api/parties/${roomCode}/command`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-host-token': localHostToken,
+        },
+        body: JSON.stringify({
+          ...payload,
+          expectedSeq: lastServerSeqRef.current > 0 ? lastServerSeqRef.current : undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.playbackState?.seq) {
+        lastServerSeqRef.current = Math.max(lastServerSeqRef.current, data.playbackState.seq);
+        return;
+      }
+      if (res.status === 403) {
+        setEffectiveIsHost(false);
+        setLocalHostToken(undefined);
+        setPartyActionMessage(
+          'Host controls were transferred or revoked. Re-syncing to current host...'
+        );
+        void fetchLatestPartyAndSync(true);
+      } else if (res.status === 409 && data.playbackState?.seq) {
+        lastServerSeqRef.current = Math.max(lastServerSeqRef.current, data.playbackState.seq);
+        void fetchLatestPartyAndSync(true);
+      } else if (!res.ok) {
+        setPartyActionMessage(data.error || 'Could not sync playback command with Watch Party.');
+      }
+    } catch {
+      setPartyActionMessage('Network error broadcasting playback command to Watch Party.');
+    }
+  };
+
   const handlePlayToggle = async () => {
     if (!controllerRef.current) return;
     if (roomCode && !effectiveIsHost) {
@@ -389,25 +542,18 @@ export function Theatre({
     const actualPlaying = controllerRef.current.getState().isPlaying;
 
     if (roomCode && effectiveIsHost && localHostToken) {
-      try {
-        await fetch(`/api/parties/${roomCode}/command`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-host-token': localHostToken,
-          },
-          body: JSON.stringify({
-            command: actualPlaying ? 'play' : 'pause',
-            sourceTime: controllerRef.current.getSourceTime(),
-          }),
-        });
-      } catch (err) {
-        console.warn('Failed to broadcast play command:', err);
+      if (seekBroadcastTimerRef.current) {
+        clearTimeout(seekBroadcastTimerRef.current);
+        seekBroadcastTimerRef.current = null;
       }
+      await broadcastHostCommand({
+        command: actualPlaying ? 'play' : 'pause',
+        sourceTime: controllerRef.current.getSourceTime(),
+      });
     }
   };
 
-  const handleSeek = async (time: number) => {
+  const handleSeek = async (time: number, immediateBroadcast = false) => {
     if (roomCode && !effectiveIsHost) {
       setPartyActionMessage('Only the Watch Party host can seek the timeline.');
       return;
@@ -415,20 +561,17 @@ export function Theatre({
     controllerRef.current?.seekToSourceTime(time);
 
     if (roomCode && effectiveIsHost && localHostToken) {
-      try {
-        await fetch(`/api/parties/${roomCode}/command`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-host-token': localHostToken,
-          },
-          body: JSON.stringify({
-            command: 'seek',
-            sourceTime: time,
-          }),
-        });
-      } catch (err) {
-        console.warn('Failed to broadcast seek command:', err);
+      if (seekBroadcastTimerRef.current) {
+        clearTimeout(seekBroadcastTimerRef.current);
+        seekBroadcastTimerRef.current = null;
+      }
+      if (immediateBroadcast) {
+        await broadcastHostCommand({ command: 'seek', sourceTime: time });
+      } else {
+        seekBroadcastTimerRef.current = setTimeout(() => {
+          seekBroadcastTimerRef.current = null;
+          void broadcastHostCommand({ command: 'seek', sourceTime: time });
+        }, 180);
       }
     }
   };
@@ -799,7 +942,7 @@ export function Theatre({
     return (
       <div className="relative min-h-screen bg-[#07090e] text-slate-100 flex flex-col font-sans select-none">
         {/* Minimalist Top Canvas Bar */}
-        <header className="border-b border-slate-800/80 bg-slate-950/70 backdrop-blur-md px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-30">
+        <header className="border-b border-slate-800/80 bg-slate-950/70 backdrop-blur-md px-4 sm:px-6 py-3 flex items-center justify-between relative z-20">
           <div className="flex items-center gap-3">
             {onExit && (
               <button
@@ -1191,31 +1334,40 @@ export function Theatre({
   const isAdvanced = syncState?.isAdvancedMode || false;
   const primaryStatus = syncState?.primaryStatus || 'paused';
 
+  const hostParticipant = partyParticipants.find((p) => p.id === partyHostId);
+  const isHostDisconnected = Boolean(
+    roomCode &&
+      !effectiveIsHost &&
+      participantToken &&
+      hostParticipant &&
+      hostParticipant.status === 'disconnected'
+  );
+
   return (
     <div className="relative min-h-screen bg-[#07090e] text-slate-100 flex flex-col font-sans">
       {/* Top Header Bar */}
-      <header className="border-b border-slate-800/80 bg-slate-950/70 backdrop-blur-md px-4 py-2.5 flex items-center justify-between sticky top-0 z-30">
-        <div className="flex items-center gap-3">
+      <header className="border-b border-slate-800/80 bg-slate-950/70 backdrop-blur-md px-3 sm:px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 relative z-20">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
           {onExit && (
             <button
               onClick={onExit}
-              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 transition-colors"
+              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 transition-colors cursor-pointer"
             >
               <span>&larr; Exit</span>
             </button>
           )}
-          <div className="h-4 w-px bg-slate-800" />
-          <h2 className="text-sm font-semibold text-white truncate max-w-md">
+          <div className="hidden sm:block h-4 w-px bg-slate-800" />
+          <h2 className="text-xs sm:text-sm font-semibold text-white truncate max-w-[180px] sm:max-w-md">
             {sourceVideo.title}
           </h2>
-          <span className="text-xs text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded-full font-medium">
+          <span className="text-[11px] sm:text-xs text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded-full font-medium truncate max-w-[140px] sm:max-w-none">
             with {primaryReaction.creator}
           </span>
 
           {/* Change streams button */}
           <button
             onClick={() => setIsStreamChooserOpen(true)}
-            className="hidden sm:flex items-center gap-1.5 text-xs text-indigo-300 hover:text-white px-2.5 py-1 rounded-lg bg-indigo-600/20 border border-indigo-500/30 hover:bg-indigo-600/30 transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 text-xs text-indigo-300 hover:text-white px-2.5 py-1 rounded-lg bg-indigo-600/20 border border-indigo-500/30 hover:bg-indigo-600/30 transition-colors cursor-pointer"
             title="Change streams or add extra reactors"
           >
             <Tv className="w-3.5 h-3.5" />
@@ -1225,14 +1377,18 @@ export function Theatre({
           {/* Clear back to blank canvas button */}
           <button
             onClick={() => {
-              setSourceVideo(null);
-              setPrimaryReaction(null);
-              setExtraReactions([]);
-              if (controllerRef.current) {
-                controllerRef.current.destroy();
-                controllerRef.current = null;
+              if (onExit) {
+                onExit();
+              } else {
+                setSourceVideo(null);
+                setPrimaryReaction(null);
+                setExtraReactions([]);
+                if (controllerRef.current) {
+                  controllerRef.current.destroy();
+                  controllerRef.current = null;
+                }
+                setSyncState(null);
               }
-              setSyncState(null);
             }}
             className="hidden md:flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 px-2 py-1 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 transition-colors cursor-pointer"
             title="Clear and return to blank canvas"
@@ -1251,7 +1407,7 @@ export function Theatre({
                 }
                 onCreateParty(sourceVideo, primaryReaction, extraReactions);
               }}
-              className="hidden sm:flex items-center gap-1.5 text-xs text-purple-200 hover:text-white px-2.5 py-1 rounded-lg bg-purple-600/30 border border-purple-500/40 hover:bg-purple-600/50 transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 text-xs text-purple-200 hover:text-white px-2.5 py-1 rounded-lg bg-purple-600/30 border border-purple-500/40 hover:bg-purple-600/50 transition-colors cursor-pointer"
               title={
                 sourceVideo.isLocalFile || primaryReaction.isLocalFile
                   ? 'Local browser files cannot be streamed to remote Watch Party guests'
@@ -1265,14 +1421,14 @@ export function Theatre({
         </div>
 
         {/* Sync Status Badge & Mode Switcher */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           {roomCode && (
-            <div className="hidden sm:flex items-center gap-1.5 bg-purple-950/40 border border-purple-500/30 px-2.5 py-1 rounded-md text-xs">
+            <div className="flex items-center gap-1.5 bg-purple-950/40 border border-purple-500/30 px-2.5 py-1 rounded-md text-xs">
               <Users className="w-3.5 h-3.5 text-purple-400" />
-              <span className="text-slate-400">Party Code:</span>
+              <span className="hidden sm:inline text-slate-400">Party Code:</span>
               <span className="font-mono font-bold text-purple-300">{roomCode}</span>
               <span
-                className={`ml-1 text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                className={`ml-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded ${
                   effectiveIsHost
                     ? 'bg-purple-500/20 text-purple-200'
                     : 'bg-slate-800 text-slate-300'
@@ -1284,7 +1440,7 @@ export function Theatre({
           )}
 
           {/* Honest Sync status pill */}
-          <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 px-3 py-1 rounded-full text-xs">
+          <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 px-2.5 sm:px-3 py-1 rounded-full text-xs">
             <span
               className={`w-2 h-2 rounded-full ${
                 syncState?.hasPlayerErrors || primaryStatus === 'error'
@@ -1320,7 +1476,7 @@ export function Theatre({
           {/* Basic vs Advanced Mode Toggle */}
           <button
             onClick={() => controllerRef.current?.toggleAdvancedMode()}
-            className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-all ${
+            className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer ${
               isAdvanced
                 ? 'bg-indigo-600/30 border-indigo-500 text-indigo-200'
                 : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
@@ -1329,7 +1485,7 @@ export function Theatre({
             aria-label="Toggle Advanced Mode"
           >
             <Sliders className="w-3.5 h-3.5" />
-            <span>{isAdvanced ? 'Advanced Mode' : 'Basic Mode'}</span>
+            <span>{isAdvanced ? 'Advanced' : 'Basic'}</span>
           </button>
         </div>
       </header>
@@ -1337,14 +1493,14 @@ export function Theatre({
       {/* Main Content Arena */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         {/* Left Side: Video Players Arena & Playback Timeline */}
-        <div className="flex-1 flex flex-col p-4 gap-3 overflow-y-auto">
+        <div className="flex-1 flex flex-col p-3 sm:p-4 gap-3 overflow-y-auto">
           {/* Layout & Audio Quick-Bar */}
-          <div className="flex items-center justify-between bg-slate-900/60 border border-slate-800/80 px-3 py-1.5 rounded-lg text-xs">
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-400 text-[11px] mr-1">Layout:</span>
+          <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-900/60 border border-slate-800/80 px-3 py-2 rounded-lg text-xs">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-slate-400 text-[11px] mr-0.5">Layout:</span>
               <button
                 onClick={() => controllerRef.current?.setLayout('side-by-side')}
-                className={`p-1.5 rounded ${
+                className={`p-1.5 rounded cursor-pointer ${
                   currentLayout === 'side-by-side' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
                 }`}
                 title="Side by Side"
@@ -1353,7 +1509,7 @@ export function Theatre({
               </button>
               <button
                 onClick={() => controllerRef.current?.setLayout('grid')}
-                className={`p-1.5 rounded ${
+                className={`p-1.5 rounded cursor-pointer ${
                   currentLayout === 'grid' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
                 }`}
                 title="Grid View"
@@ -1362,7 +1518,7 @@ export function Theatre({
               </button>
               <button
                 onClick={() => controllerRef.current?.setLayout('source-focus')}
-                className={`px-2 py-1 rounded ${
+                className={`px-2 py-1 rounded cursor-pointer ${
                   currentLayout === 'source-focus' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -1370,7 +1526,7 @@ export function Theatre({
               </button>
               <button
                 onClick={() => controllerRef.current?.setLayout('reactor-focus')}
-                className={`px-2 py-1 rounded ${
+                className={`px-2 py-1 rounded cursor-pointer ${
                   currentLayout === 'reactor-focus' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -1378,7 +1534,7 @@ export function Theatre({
               </button>
               <button
                 onClick={() => controllerRef.current?.setLayout('pip')}
-                className={`px-2 py-1 rounded flex items-center gap-1 ${
+                className={`px-2 py-1 rounded flex items-center gap-1 cursor-pointer ${
                   currentLayout === 'pip' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
                 }`}
                 title="Picture-in-Picture overlay"
@@ -1390,12 +1546,12 @@ export function Theatre({
 
             {/* Audio Focus Selector */}
             <div className="flex items-center gap-2">
-              <Volume2 className="w-3.5 h-3.5 text-indigo-400" />
+              <Volume2 className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
               <span className="text-slate-400 text-[11px]">Audio Focus:</span>
               <select
                 value={syncState?.audioFocus || 'source'}
                 onChange={(e) => controllerRef.current?.setAudioFocus(e.target.value)}
-                className="bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded px-2 py-0.5 focus:outline-none"
+                className="bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded px-2 py-0.5 focus:outline-none max-w-[170px]"
               >
                 <option value="source">Source Video (Original)</option>
                 <option value={primaryReaction.id}>{primaryReaction.creator} (Primary)</option>
@@ -1416,7 +1572,7 @@ export function Theatre({
                   <Lock className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2 font-semibold text-amber-200">
+                  <div className="flex flex-wrap items-center gap-2 font-semibold text-amber-200">
                     <span>Manual Synchronisation Active</span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">
                       Target Reaction Cue:{' '}
@@ -1444,20 +1600,50 @@ export function Theatre({
             </div>
           )}
 
+          {/* Host Disconnected Recovery Banner */}
+          {isHostDisconnected && (
+            <div className="bg-amber-950/50 border border-amber-500/40 text-amber-100 rounded-xl px-3 py-2.5 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>
+                  Watch Party host ({hostParticipant?.name || 'Host'}) disconnected. Claim host controls to resume controlling playback for the room.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleClaimHost(false)}
+                disabled={isClaimingHost}
+                className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-[11px] font-semibold shrink-0 self-start sm:self-auto cursor-pointer"
+              >
+                {isClaimingHost ? 'Claiming...' : 'Claim Host Controls'}
+              </button>
+            </div>
+          )}
+
           {/* Watch Party Connection Recovery Banner */}
           {roomCode && partyConnectionError && (
-            <div className="bg-rose-950/60 border border-rose-500/40 text-rose-100 rounded-xl px-3 py-2 text-xs flex items-center justify-between gap-3">
+            <div className="bg-rose-950/60 border border-rose-500/40 text-rose-100 rounded-xl px-3 py-2.5 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
               <div className="flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
                 <span>{partyConnectionError}</span>
               </div>
-              <button
-                onClick={() => fetchLatestPartyAndSync(true)}
-                className="px-2.5 py-1 rounded-lg bg-rose-600/30 hover:bg-rose-600/50 border border-rose-400/40 text-rose-100 text-[11px] font-semibold flex items-center gap-1 shrink-0 cursor-pointer"
-              >
-                <RefreshCw className="w-3 h-3" />
-                <span>Retry Now</span>
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => fetchLatestPartyAndSync(true)}
+                  className="px-2.5 py-1 rounded-lg bg-rose-600/30 hover:bg-rose-600/50 border border-rose-400/40 text-rose-100 text-[11px] font-semibold flex items-center gap-1 cursor-pointer"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>Retry Now</span>
+                </button>
+                {onLeavePartyToPrivate && (
+                  <button
+                    onClick={onLeavePartyToPrivate}
+                    className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-[11px] font-semibold cursor-pointer"
+                  >
+                    Watch Privately
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
@@ -1467,7 +1653,7 @@ export function Theatre({
               <span>{partyActionMessage}</span>
               <button
                 onClick={() => setPartyActionMessage(null)}
-                className="text-purple-300 hover:text-white"
+                className="text-purple-300 hover:text-white cursor-pointer"
                 aria-label="Dismiss notice"
               >
                 <X className="w-3.5 h-3.5" />
@@ -1696,7 +1882,7 @@ export function Theatre({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => handleSeek(Math.max(0, currentSourceTime - 10))}
+                  onClick={() => handleSeek(Math.max(0, currentSourceTime - 10), true)}
                   disabled={Boolean(roomCode && !effectiveIsHost)}
                   className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 transition-colors"
                   title={roomCode && !effectiveIsHost ? 'Host controls playback' : 'Rewind 10 seconds'}
@@ -1722,7 +1908,7 @@ export function Theatre({
                   )}
                 </button>
                 <button
-                  onClick={() => handleSeek(Math.min(sliderMaxDuration, currentSourceTime + 10))}
+                  onClick={() => handleSeek(Math.min(sliderMaxDuration, currentSourceTime + 10), true)}
                   disabled={Boolean(roomCode && !effectiveIsHost)}
                   className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 transition-colors"
                   title={roomCode && !effectiveIsHost ? 'Host controls playback' : 'Forward 10 seconds'}
@@ -2098,23 +2284,38 @@ export function Theatre({
                   <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
                     {partyParticipants.map((p) => {
                       const isParticipantHost = p.isHost || p.id === partyHostId;
+                      const isDisconnected = p.status === 'disconnected';
                       return (
                         <div
                           key={p.id}
                           className="flex items-center justify-between text-[11px] py-0.5"
                         >
                           <div className="flex items-center gap-1.5 min-w-0">
-                            <span className="text-slate-200 truncate">{p.name}</span>
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                isDisconnected ? 'bg-slate-600' : 'bg-emerald-400'
+                              }`}
+                            />
+                            <span
+                              className={`truncate ${
+                                isDisconnected ? 'text-slate-500' : 'text-slate-200'
+                              }`}
+                            >
+                              {p.name}
+                            </span>
+                            {isDisconnected && (
+                              <span className="text-[9px] text-slate-500">(offline)</span>
+                            )}
                             {isParticipantHost && (
                               <span className="text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1 rounded">
                                 HOST
                               </span>
                             )}
                           </div>
-                          {effectiveIsHost && !isParticipantHost && (
+                          {effectiveIsHost && !isParticipantHost && !isDisconnected && (
                             <button
                               onClick={() => handleReassignHost(p.id, p.name)}
-                              className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-purple-600 text-slate-300 hover:text-white transition-colors shrink-0"
+                              className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-purple-600 text-slate-300 hover:text-white transition-colors shrink-0 cursor-pointer"
                             >
                               Make Host
                             </button>

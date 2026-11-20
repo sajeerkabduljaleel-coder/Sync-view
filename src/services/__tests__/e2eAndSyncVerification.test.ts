@@ -831,3 +831,177 @@ test('Capability Enforcement: source buffering holds without seek loops, manual 
 
   bufController.destroy();
 });
+
+test('E2E HTTP: Watch Party presence, explicit leave, safe claim-host recovery, reassignment token handoff, and stale seq rejection', async () => {
+  const shortTimeoutRepo = new SingleInstanceFileWatchPartyRepository(tmpDir, 'presence-parties.json');
+  const presenceManager = new WatchPartyManager(shortTimeoutRepo, { participantTimeoutMs: 120 });
+  const presenceApp = createSyncViewApp(presenceManager);
+  const presenceServer = await new Promise<http.Server>((resolve) => {
+    const s = presenceApp.listen(0, '127.0.0.1', () => resolve(s));
+  });
+
+  try {
+    const pPort = (presenceServer.address() as AddressInfo).port;
+    const pBase = `http://127.0.0.1:${pPort}`;
+
+    // 1. Resolve valid sample source & reaction from server catalogue and create room
+    const srcs = await (await fetch(`${pBase}/api/catalogue/sources`)).json();
+    const rxs = await (await fetch(`${pBase}/api/catalogue/reactions?sourceId=${encodeURIComponent(srcs[0].id)}`)).json();
+
+    const createRes = await fetch(`${pBase}/api/parties`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Presence & Recovery Party',
+        hostName: 'HostA',
+        sourceId: srcs[0].id,
+        reactionId: rxs[0].id,
+      }),
+    });
+    assert.equal(createRes.status, 201);
+    const created = await createRes.json();
+    const code = created.room.roomCode;
+    const hostToken = created.hostToken;
+    const hostParticipantToken = created.participantToken;
+
+    // 2. Guest joins
+    const joinRes = await fetch(`${pBase}/api/parties/${code}/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ participantName: 'GuestB' }),
+    });
+    assert.equal(joinRes.status, 200);
+    const guestJoined = await joinRes.json();
+    const guestToken = guestJoined.participantToken;
+    const guestId = guestJoined.participantId;
+    assert.equal(guestJoined.isHost, false);
+
+    // 3. Repeated reconnects must not duplicate participants and must keep watching status
+    for (let i = 0; i < 3; i++) {
+      const rejoin = await fetch(`${pBase}/api/parties/${code}/join`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-participant-token': guestToken,
+        },
+        body: JSON.stringify({ participantName: 'GuestB' }),
+      });
+      assert.equal(rejoin.status, 200);
+      const rj = await rejoin.json();
+      assert.equal(rj.room.participants.length, 2);
+      assert.equal(rj.participantId, guestId);
+    }
+
+    // 4. Out-of-order stale command sequence is rejected with 409
+    const cmd1 = await fetch(`${pBase}/api/parties/${code}/command`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-host-token': hostToken },
+      body: JSON.stringify({ command: 'play', sourceTime: 25, expectedSeq: 1 }),
+    });
+    assert.equal(cmd1.status, 200);
+    const cmd1Data = await cmd1.json();
+    assert.equal(cmd1Data.playbackState.seq, 2);
+
+    const staleCmd = await fetch(`${pBase}/api/parties/${code}/command`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-host-token': hostToken },
+      body: JSON.stringify({ command: 'seek', sourceTime: 5, expectedSeq: 1 }),
+    });
+    assert.equal(staleCmd.status, 409, 'Out-of-order expectedSeq < current seq must return 409');
+
+    // 5. Guest CANNOT claim host while current host is still connected
+    const blockedClaim = await fetch(`${pBase}/api/parties/${code}/claim-host`, {
+      method: 'POST',
+      headers: { 'x-participant-token': guestToken },
+    });
+    assert.equal(blockedClaim.status, 403, 'Active host must block takeover attempts');
+
+    // 6. Host explicitly leaves -> marked disconnected immediately -> Guest can safely claim host
+    const hostLeave = await fetch(`${pBase}/api/parties/${code}/leave`, {
+      method: 'POST',
+      headers: { 'x-participant-token': hostParticipantToken },
+    });
+    assert.equal(hostLeave.status, 200);
+
+    const stateAfterLeave = await fetch(`${pBase}/api/parties/${code}`, {
+      headers: { 'x-participant-token': guestToken },
+    });
+    assert.equal(stateAfterLeave.status, 200);
+    const afterLeaveData = await stateAfterLeave.json();
+    const hostEntry = afterLeaveData.room.participants.find((p: any) => p.id === created.room.hostId);
+    assert.equal(hostEntry.status, 'disconnected');
+
+    const guestClaim = await fetch(`${pBase}/api/parties/${code}/claim-host`, {
+      method: 'POST',
+      headers: { 'x-participant-token': guestToken },
+    });
+    assert.equal(guestClaim.status, 200, 'Verified guest must be able to claim host after host disconnects');
+    const claimedData = await guestClaim.json();
+    assert.ok(claimedData.hostToken);
+    assert.equal(claimedData.room.hostId, guestId);
+
+    // 7. Old host reconnects -> must NOT get host privileges back automatically
+    const oldHostRejoin = await fetch(`${pBase}/api/parties/${code}/join`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-participant-token': hostParticipantToken,
+      },
+      body: JSON.stringify({ participantName: 'HostA' }),
+    });
+    assert.equal(oldHostRejoin.status, 200);
+    const oldHostRejoinData = await oldHostRejoin.json();
+    assert.equal(oldHostRejoinData.isHost, false);
+    assert.equal(oldHostRejoinData.room.participants.length, 2);
+
+    // 8. Reassign back to HostA -> HostA claims their own rotated host token via /claim-host
+    const reassignBack = await fetch(`${pBase}/api/parties/${code}/reassign-host`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-host-token': claimedData.hostToken,
+      },
+      body: JSON.stringify({ targetParticipantId: created.room.hostId }),
+    });
+    assert.equal(reassignBack.status, 200);
+
+    const designatedClaim = await fetch(`${pBase}/api/parties/${code}/claim-host`, {
+      method: 'POST',
+      headers: { 'x-participant-token': hostParticipantToken },
+    });
+    assert.equal(designatedClaim.status, 200, 'Newly reassigned host must be able to claim rotated hostToken');
+    const designatedData = await designatedClaim.json();
+    assert.ok(designatedData.hostToken);
+
+    const reclaimedHostCmd = await fetch(`${pBase}/api/parties/${code}/command`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-host-token': designatedData.hostToken,
+      },
+      body: JSON.stringify({ command: 'pause', sourceTime: 30 }),
+    });
+    assert.equal(reclaimedHostCmd.status, 200);
+  } finally {
+    await new Promise<void>((resolve) => presenceServer.close(() => resolve()));
+  }
+});
+
+test('E2E HTTP: /api/catalogue/sources and /api/catalogue/reactions return valid catalogue items', async () => {
+  const srcRes = await fetch(`${baseUrl}/api/catalogue/sources`);
+  assert.equal(srcRes.status, 200);
+  const srcs = await srcRes.json();
+  assert.ok(Array.isArray(srcs) && srcs.length > 0, 'Catalogue sources must be non-empty');
+
+  const rxRes = await fetch(`${baseUrl}/api/catalogue/reactions`);
+  assert.equal(rxRes.status, 200);
+  const rxs = await rxRes.json();
+  assert.ok(Array.isArray(rxs) && rxs.length > 0, 'Catalogue reactions must be non-empty');
+
+  const filteredRxRes = await fetch(`${baseUrl}/api/catalogue/reactions?sourceId=${encodeURIComponent(srcs[0].id)}`);
+  assert.equal(filteredRxRes.status, 200);
+  const filteredRxs = await filteredRxRes.json();
+  assert.ok(Array.isArray(filteredRxs) && filteredRxs.length > 0);
+  assert.ok(filteredRxs.every((r: any) => r.sourceId === srcs[0].id));
+});
+

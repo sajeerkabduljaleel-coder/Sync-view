@@ -134,7 +134,7 @@ export interface WatchPartyParticipant {
   avatar: string;
   isHost: boolean;
   joinedAt: number;
-  status: 'watching' | 'buffering' | 'idle';
+  status: 'watching' | 'buffering' | 'idle' | 'disconnected';
 }
 
 export interface ChatMessage {
